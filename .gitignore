@@ -8,5 +8,4 @@ dist/
 build/
 .venv/
 venv/
-*.spec
 screenshots/
