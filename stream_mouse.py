@@ -566,6 +566,7 @@ class AppSettings(QObject):
         self._hotkeys = {
             "escape": {"vk": 27, "ctrl": False, "shift": False, "alt": False},
             "recording": {"vk": 112, "ctrl": True, "shift": False, "alt": False},
+            "waypoint": {"vk": 113, "ctrl": True, "shift": False, "alt": False},
             "magnify": {"vk": 114, "ctrl": True, "shift": False, "alt": False},
             "replay": {"vk": 116, "ctrl": True, "shift": False, "alt": False},
             "undo": {"vk": 90, "ctrl": True, "shift": False, "alt": False},
@@ -1328,7 +1329,7 @@ class SettingsDialog(QDialog):
         wp_group = QGroupBox("中斷點 (Waypoint)")
         wp_form = QFormLayout(wp_group)
 
-        wp_hint = QLabel("錄製中點右鍵 = 插入中斷點\n播放時依序停在每個中斷點")
+        wp_hint = QLabel("錄製中按中斷點快速鍵 = 插入中斷點\n播放時依序停在每個中斷點")
         wp_hint.setStyleSheet("color: #aaa; font-size: 11px;")
         wp_form.addRow(wp_hint)
 
@@ -1391,6 +1392,7 @@ class SettingsDialog(QDialog):
         self._hotkey_widgets: dict[str, QPushButton] = {}
         for action, label in [
             ("recording", "錄製切換"),
+            ("waypoint", "插入中斷點"),
             ("replay", "重播動畫"),
             ("magnify", "放大鏡/截圖"),
             ("escape", "返回一般模式"),
@@ -1526,6 +1528,7 @@ class SettingsDialog(QDialog):
         s.crosshair_alpha = 150
         s.set_hotkey("escape", 27, False, False, False)
         s.set_hotkey("recording", 112, True, False, False)
+        s.set_hotkey("waypoint", 113, True, False, False)
         s.set_hotkey("magnify", 114, True, False, False)
         s.set_hotkey("replay", 116, True, False, False)
         s.set_hotkey("undo", 90, True, False, False)
@@ -1685,7 +1688,6 @@ class OverlayWindow(QWidget):
         self.recorded_points: list[QPoint] = []
         self._recorded_times: list[float] = []
         self._recorded_waypoints: list[int] = []
-        self._prev_lb = False
         self.paths: list[list[QPoint]] = []
         self._path_times: list[list[float]] = []
         self._path_anim_starts: list[float] = []
@@ -1739,12 +1741,6 @@ class OverlayWindow(QWidget):
                 if not self.recorded_points or manhattan(self.recorded_points[-1], self.mouse_local) >= 3:
                     self.recorded_points.append(QPoint(self.mouse_local))
                     self._recorded_times.append(time.time())
-                rb_down = bool(win32api.GetAsyncKeyState(win32con.VK_RBUTTON) & 0x8000)
-                if rb_down and not self._prev_lb and self.recorded_points:
-                    idx = len(self.recorded_points) - 1
-                    if not self._recorded_waypoints or self._recorded_waypoints[-1] != idx:
-                        self._recorded_waypoints.append(idx)
-                self._prev_lb = rb_down
         if self.mode == Mode.MAGNIFY and self.settings.zoom_idle_timeout > 0:
             if time.time() - self._last_interaction_time > self.settings.zoom_idle_timeout:
                 self.return_to_normal()
@@ -1762,7 +1758,6 @@ class OverlayWindow(QWidget):
             self.recorded_points = []
             self._recorded_times = []
             self._recorded_waypoints = []
-            self._prev_lb = False
         else:
             self.recording = False
             if len(self.recorded_points) > 1:
@@ -1775,6 +1770,14 @@ class OverlayWindow(QWidget):
             self._recorded_times = []
             self._recorded_waypoints = []
         self.update()
+
+    def insert_waypoint(self) -> None:
+        if not self.recording or not self.recorded_points:
+            return
+        idx = len(self.recorded_points) - 1
+        if not self._recorded_waypoints or self._recorded_waypoints[-1] != idx:
+            self._recorded_waypoints.append(idx)
+            self.update()
 
     def replay_animations(self) -> None:
         if not self.paths:
@@ -2454,6 +2457,8 @@ class ControlWindow(QWidget):
                 self.overlay.take_screenshot()
             else:
                 self.overlay.enter_magnify_mode()
+        elif action == "waypoint":
+            self.overlay.insert_waypoint()
         elif action == "replay":
             self.overlay.replay_animations()
         elif action == "undo":
