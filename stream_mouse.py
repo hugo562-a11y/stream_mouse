@@ -559,6 +559,10 @@ class AppSettings(QObject):
         self._waypoint_pause = 0.5
         self._waypoint_dot_size = 8
         self._waypoint_dot_color = QColor(255, 220, 0)
+        self._waypoint_dot_alpha = 80
+        self._waypoint_label_color = QColor(0, 0, 0)
+        self._waypoint_border_width = 1
+        self._waypoint_border_color = QColor(0, 0, 0)
         self._hotkeys = {
             "escape": {"vk": 27, "ctrl": False, "shift": False, "alt": False},
             "recording": {"vk": 112, "ctrl": True, "shift": False, "alt": False},
@@ -883,6 +887,46 @@ class AppSettings(QObject):
             self._waypoint_dot_color = v
             self._emit()
 
+    @property
+    def waypoint_dot_alpha(self) -> int:
+        return self._waypoint_dot_alpha
+
+    @waypoint_dot_alpha.setter
+    def waypoint_dot_alpha(self, v: int) -> None:
+        if self._waypoint_dot_alpha != v:
+            self._waypoint_dot_alpha = v
+            self._emit()
+
+    @property
+    def waypoint_label_color(self) -> QColor:
+        return self._waypoint_label_color
+
+    @waypoint_label_color.setter
+    def waypoint_label_color(self, v: QColor) -> None:
+        if self._waypoint_label_color != v:
+            self._waypoint_label_color = v
+            self._emit()
+
+    @property
+    def waypoint_border_width(self) -> int:
+        return self._waypoint_border_width
+
+    @waypoint_border_width.setter
+    def waypoint_border_width(self, v: int) -> None:
+        if self._waypoint_border_width != v:
+            self._waypoint_border_width = v
+            self._emit()
+
+    @property
+    def waypoint_border_color(self) -> QColor:
+        return self._waypoint_border_color
+
+    @waypoint_border_color.setter
+    def waypoint_border_color(self, v: QColor) -> None:
+        if self._waypoint_border_color != v:
+            self._waypoint_border_color = v
+            self._emit()
+
     def get_hotkey_text(self, action: str) -> str:
         hk = self._hotkeys.get(action)
         if hk is None:
@@ -933,6 +977,10 @@ class AppSettings(QObject):
         s.setValue("waypoint_pause", self._waypoint_pause)
         s.setValue("waypoint_dot_size", self._waypoint_dot_size)
         s.setValue("waypoint_dot_color", self._waypoint_dot_color.rgba())
+        s.setValue("waypoint_dot_alpha", self._waypoint_dot_alpha)
+        s.setValue("waypoint_label_color", self._waypoint_label_color.rgba())
+        s.setValue("waypoint_border_width", self._waypoint_border_width)
+        s.setValue("waypoint_border_color", self._waypoint_border_color.rgba())
         for action, hk in self._hotkeys.items():
             s.setValue(f"hotkey_{action}_vk", hk["vk"])
             s.setValue(f"hotkey_{action}_ctrl", hk["ctrl"])
@@ -982,6 +1030,14 @@ class AppSettings(QObject):
         rgba_wp = s.value("waypoint_dot_color")
         if rgba_wp is not None:
             self._waypoint_dot_color = QColor.fromRgba(int(rgba_wp))
+        self._waypoint_dot_alpha = int(s.value("waypoint_dot_alpha", self._waypoint_dot_alpha))
+        rgba_wl = s.value("waypoint_label_color")
+        if rgba_wl is not None:
+            self._waypoint_label_color = QColor.fromRgba(int(rgba_wl))
+        self._waypoint_border_width = int(s.value("waypoint_border_width", self._waypoint_border_width))
+        rgba_wb = s.value("waypoint_border_color")
+        if rgba_wb is not None:
+            self._waypoint_border_color = QColor.fromRgba(int(rgba_wb))
         for action in self._hotkeys:
             vk = s.value(f"hotkey_{action}_vk")
             if vk is not None:
@@ -1295,7 +1351,31 @@ class SettingsDialog(QDialog):
         self.waypoint_dot_color_btn = QPushButton()
         self._update_color_button(self.waypoint_dot_color_btn, settings.waypoint_dot_color)
         self.waypoint_dot_color_btn.clicked.connect(self._pick_waypoint_dot_color)
-        wp_form.addRow("中斷點顏色:", self.waypoint_dot_color_btn)
+        wp_form.addRow("背景顏色:", self.waypoint_dot_color_btn)
+
+        self.waypoint_dot_alpha_slider = QSlider(Qt.Orientation.Horizontal)
+        self.waypoint_dot_alpha_slider.setRange(0, 100)
+        self.waypoint_dot_alpha_slider.setValue(settings.waypoint_dot_alpha)
+        self.waypoint_dot_alpha_slider.valueChanged.connect(lambda v: setattr(settings, "waypoint_dot_alpha", v))
+        wp_form.addRow("背景透明度 (%):", self.waypoint_dot_alpha_slider)
+
+        self.waypoint_label_color_btn = QPushButton()
+        self._update_color_button(self.waypoint_label_color_btn, settings.waypoint_label_color)
+        self.waypoint_label_color_btn.clicked.connect(self._pick_waypoint_label_color)
+        wp_form.addRow("數字顏色:", self.waypoint_label_color_btn)
+
+        self.waypoint_border_width_spin = QSpinBox()
+        self.waypoint_border_width_spin.setRange(0, 10)
+        self.waypoint_border_width_spin.setSuffix(" px")
+        self.waypoint_border_width_spin.setSpecialValueText("無")
+        self.waypoint_border_width_spin.setValue(settings.waypoint_border_width)
+        self.waypoint_border_width_spin.valueChanged.connect(lambda v: setattr(settings, "waypoint_border_width", v))
+        wp_form.addRow("外框粗細:", self.waypoint_border_width_spin)
+
+        self.waypoint_border_color_btn = QPushButton()
+        self._update_color_button(self.waypoint_border_color_btn, settings.waypoint_border_color)
+        self.waypoint_border_color_btn.clicked.connect(self._pick_waypoint_border_color)
+        wp_form.addRow("外框顏色:", self.waypoint_border_color_btn)
 
         tt_layout.addWidget(wp_group)
         tt_layout.addStretch()
@@ -1374,10 +1454,22 @@ class SettingsDialog(QDialog):
             self._update_color_button(self.trail_color_btn, color)
 
     def _pick_waypoint_dot_color(self) -> None:
-        color = QColorDialog.getColor(self.settings.waypoint_dot_color, self, "選擇中斷點顏色")
+        color = QColorDialog.getColor(self.settings.waypoint_dot_color, self, "選擇中斷點背景顏色")
         if color.isValid():
             self.settings.waypoint_dot_color = color
             self._update_color_button(self.waypoint_dot_color_btn, color)
+
+    def _pick_waypoint_label_color(self) -> None:
+        color = QColorDialog.getColor(self.settings.waypoint_label_color, self, "選擇數字顏色")
+        if color.isValid():
+            self.settings.waypoint_label_color = color
+            self._update_color_button(self.waypoint_label_color_btn, color)
+
+    def _pick_waypoint_border_color(self) -> None:
+        color = QColorDialog.getColor(self.settings.waypoint_border_color, self, "選擇外框顏色")
+        if color.isValid():
+            self.settings.waypoint_border_color = color
+            self._update_color_button(self.waypoint_border_color_btn, color)
 
     def _start_listening(self, action: str, button: QPushButton) -> None:
         self._listening_action = action
@@ -1422,6 +1514,10 @@ class SettingsDialog(QDialog):
         s.waypoint_pause = 0.5
         s.waypoint_dot_size = 8
         s.waypoint_dot_color = QColor(255, 220, 0)
+        s.waypoint_dot_alpha = 80
+        s.waypoint_label_color = QColor(0, 0, 0)
+        s.waypoint_border_width = 1
+        s.waypoint_border_color = QColor(0, 0, 0)
         s.zoom_step = 0.25
         s.zoom_idle_timeout = 0
         s.crosshair_style = "十字線 (Crosshair)"
@@ -1550,11 +1646,21 @@ class SettingsDialog(QDialog):
         self.waypoint_dot_size_spin.setValue(s.waypoint_dot_size)
         self.waypoint_dot_size_spin.blockSignals(False)
 
+        self.waypoint_dot_alpha_slider.blockSignals(True)
+        self.waypoint_dot_alpha_slider.setValue(s.waypoint_dot_alpha)
+        self.waypoint_dot_alpha_slider.blockSignals(False)
+
+        self.waypoint_border_width_spin.blockSignals(True)
+        self.waypoint_border_width_spin.setValue(s.waypoint_border_width)
+        self.waypoint_border_width_spin.blockSignals(False)
+
         self._update_color_button(self.text_color_btn, s.hud_text_color)
         self._update_color_button(self.crosshair_color_btn, s.crosshair_color)
         self._update_color_button(self.pulse_color_btn, s.pulse_color)
         self._update_color_button(self.trail_color_btn, s.trail_color)
         self._update_color_button(self.waypoint_dot_color_btn, s.waypoint_dot_color)
+        self._update_color_button(self.waypoint_label_color_btn, s.waypoint_label_color)
+        self._update_color_button(self.waypoint_border_color_btn, s.waypoint_border_color)
         for action, btn in self._hotkey_widgets.items():
             btn.setText(s.get_hotkey_text(action))
 
@@ -1858,23 +1964,30 @@ class OverlayWindow(QWidget):
         # draw reached waypoint dots with numbers
         dot_r = self.settings.waypoint_dot_size
         if dot_r > 0:
-            dc = self.settings.waypoint_dot_color
+            s = self.settings
+            alpha = int(s.waypoint_dot_alpha * 255 / 100)
+            dc = s.waypoint_dot_color
+            fill = QColor(dc.red(), dc.green(), dc.blue(), alpha)
+            bw = s.waypoint_border_width
+            bc = s.waypoint_border_color
+            lc = s.waypoint_label_color
             font_size = max(7, dot_r - 2)
             font = QFont()
             font.setPixelSize(font_size)
             font.setBold(True)
             painter.setFont(font)
+            fm = painter.fontMetrics()
             for n, wp_idx in enumerate(wps, start=1):
                 if wp_idx < limit and wp_idx < len(path):
                     pt = path[wp_idx]
-                    painter.setPen(QPen(QColor(0, 0, 0, 180), 1))
-                    painter.setBrush(dc)
+                    pen = QPen(bc, bw) if bw > 0 else QPen(Qt.PenStyle.NoPen)
+                    painter.setPen(pen)
+                    painter.setBrush(fill)
                     painter.drawEllipse(pt, dot_r, dot_r)
                     label = str(n)
-                    fm = painter.fontMetrics()
                     tw = fm.horizontalAdvance(label)
                     th = fm.ascent()
-                    painter.setPen(QColor(0, 0, 0, 220))
+                    painter.setPen(lc)
                     painter.drawText(pt.x() - tw // 2, pt.y() + th // 2, label)
 
     def _paint_trail_icon(self, painter: QPainter, pos: QPoint, angle_deg: float, color: QColor) -> None:
