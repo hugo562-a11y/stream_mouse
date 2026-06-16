@@ -551,6 +551,7 @@ class AppSettings(QObject):
         self._pulse_size = 20
         self._pulse_speed = 1.0
         self._pulse_color = QColor(30, 120, 255)
+        self._pulse_color2 = QColor(255, 255, 255)
         self._trail_icon = "飛機 (Plane)"
         self._trail_length = 200
         self._trail_width = 3
@@ -809,6 +810,16 @@ class AppSettings(QObject):
             self._emit()
 
     @property
+    def pulse_color2(self) -> QColor:
+        return self._pulse_color2
+
+    @pulse_color2.setter
+    def pulse_color2(self, v: QColor) -> None:
+        if self._pulse_color2 != v:
+            self._pulse_color2 = v
+            self._emit()
+
+    @property
     def trail_icon(self) -> str:
         return self._trail_icon
 
@@ -970,6 +981,7 @@ class AppSettings(QObject):
         s.setValue("pulse_size", self._pulse_size)
         s.setValue("pulse_speed", self._pulse_speed)
         s.setValue("pulse_color", self._pulse_color.rgba())
+        s.setValue("pulse_color2", self._pulse_color2.rgba())
         s.setValue("trail_icon", self._trail_icon)
         s.setValue("trail_length", self._trail_length)
         s.setValue("trail_width", self._trail_width)
@@ -1019,6 +1031,9 @@ class AppSettings(QObject):
         rgba_pulse = s.value("pulse_color")
         if rgba_pulse is not None:
             self._pulse_color = QColor.fromRgba(int(rgba_pulse))
+        rgba_pulse2 = s.value("pulse_color2")
+        if rgba_pulse2 is not None:
+            self._pulse_color2 = QColor.fromRgba(int(rgba_pulse2))
         self._trail_icon = str(s.value("trail_icon", self._trail_icon))
         self._trail_length = int(s.value("trail_length", self._trail_length))
         self._trail_width = int(s.value("trail_width", self._trail_width))
@@ -1278,7 +1293,12 @@ class SettingsDialog(QDialog):
         self.pulse_color_btn = QPushButton()
         self._update_color_button(self.pulse_color_btn, settings.pulse_color)
         self.pulse_color_btn.clicked.connect(self._pick_pulse_color)
-        pulse_form.addRow("顏色:", self.pulse_color_btn)
+        pulse_form.addRow("外框顏色:", self.pulse_color_btn)
+
+        self.pulse_color2_btn = QPushButton()
+        self._update_color_button(self.pulse_color2_btn, settings.pulse_color2)
+        self.pulse_color2_btn.clicked.connect(self._pick_pulse_color2)
+        pulse_form.addRow("中心顏色:", self.pulse_color2_btn)
 
         tc_layout.addWidget(pulse_group)
         tc_layout.addStretch()
@@ -1444,10 +1464,16 @@ class SettingsDialog(QDialog):
             self._update_color_button(self.crosshair_color_btn, color)
 
     def _pick_pulse_color(self) -> None:
-        color = QColorDialog.getColor(self.settings.pulse_color, self, "選擇遊標顏色")
+        color = QColorDialog.getColor(self.settings.pulse_color, self, "選擇外框顏色")
         if color.isValid():
             self.settings.pulse_color = color
             self._update_color_button(self.pulse_color_btn, color)
+
+    def _pick_pulse_color2(self) -> None:
+        color = QColorDialog.getColor(self.settings.pulse_color2, self, "選擇中心顏色")
+        if color.isValid():
+            self.settings.pulse_color2 = color
+            self._update_color_button(self.pulse_color2_btn, color)
 
     def _pick_trail_color(self) -> None:
         color = QColorDialog.getColor(self.settings.trail_color, self, "選擇軌跡顏色")
@@ -1508,6 +1534,7 @@ class SettingsDialog(QDialog):
         s.pulse_size = 20
         s.pulse_speed = 1.0
         s.pulse_color = QColor(30, 120, 255)
+        s.pulse_color2 = QColor(255, 255, 255)
         s.trail_icon = "飛機 (Plane)"
         s.trail_length = 200
         s.trail_width = 3
@@ -1660,6 +1687,7 @@ class SettingsDialog(QDialog):
         self._update_color_button(self.text_color_btn, s.hud_text_color)
         self._update_color_button(self.crosshair_color_btn, s.crosshair_color)
         self._update_color_button(self.pulse_color_btn, s.pulse_color)
+        self._update_color_button(self.pulse_color2_btn, s.pulse_color2)
         self._update_color_button(self.trail_color_btn, s.trail_color)
         self._update_color_button(self.waypoint_dot_color_btn, s.waypoint_dot_color)
         self._update_color_button(self.waypoint_label_color_btn, s.waypoint_label_color)
@@ -1697,7 +1725,6 @@ class OverlayWindow(QWidget):
         self.zoom = 3.0
         self.mouse_local = QPoint(self.width() // 2, self.height() // 2)
         self._zoom_anchor = QPoint(self.width() // 2, self.height() // 2)
-        self._tick = 0
         self._magnify_strokes: list[tuple[QColor, list[QPoint]]] = []
         self._magnify_active: list[QPoint] | None = None
         self._magnify_redo: list[tuple[QColor, list[QPoint]]] = []
@@ -1747,7 +1774,6 @@ class OverlayWindow(QWidget):
                 return
         if self._screenshot_flash > 0:
             self._screenshot_flash -= 1
-        self._tick += 1
         self.update()
 
     def toggle_recording(self) -> None:
@@ -2120,26 +2146,39 @@ class OverlayWindow(QWidget):
         if style == "無 (None)":
             return
         speed = self.settings.pulse_speed
-        pulse = (math.sin(self._tick * speed / 12.0) + 1.0) / 2.0
+        # time-based so animation speed is frame-rate independent
+        pulse = (math.sin(time.time() * speed * 2.5) + 1.0) / 2.0
         size = self.settings.pulse_size
-        c = self.settings.pulse_color
+        c = self.settings.pulse_color    # 外框色
+        c2 = self.settings.pulse_color2  # 中心色
         mx, my = self.mouse_local.x(), self.mouse_local.y()
+
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         if style == "雙圓圈 (Double)":
             radius = size + int(size * 0.6 * pulse)
-            alpha = 215 - int(75 * pulse)
-            painter.setPen(QPen(QColor(255, 255, 255, alpha), 3))
-            painter.setBrush(QColor(c.red(), c.green(), c.blue(), 34))
+            outer_alpha = int(215 - 75 * pulse)
+            outer = QColor(c.red(), c.green(), c.blue(), outer_alpha)
+            painter.setPen(QPen(outer, 3))
+            painter.setBrush(QColor(c.red(), c.green(), c.blue(), 30))
             painter.drawEllipse(self.mouse_local, radius, radius)
-            painter.setPen(QPen(c, 2))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawEllipse(self.mouse_local, max(4, radius // 4), max(4, radius // 4))
+            inner_r = max(4, radius // 4)
+            inner = QColor(c2.red(), c2.green(), c2.blue(), int(200 + 55 * pulse))
+            painter.setPen(QPen(inner, 2))
+            painter.setBrush(QColor(c2.red(), c2.green(), c2.blue(), int(80 + 60 * pulse)))
+            painter.drawEllipse(self.mouse_local, inner_r, inner_r)
+
         elif style == "單圓圈 (Ring)":
             radius = size + int(size * 0.6 * pulse)
             ring = QColor(c.red(), c.green(), c.blue(), int(220 * (1 - pulse * 0.4)))
             painter.setPen(QPen(ring, 3))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(self.mouse_local, radius, radius)
+            dot = QColor(c2.red(), c2.green(), c2.blue(), 200)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(dot)
+            painter.drawEllipse(self.mouse_local, 5, 5)
+
         elif style == "十字線 (Cross)":
             arm = size + int(size * 0.3 * pulse)
             cross = QColor(c.red(), c.green(), c.blue(), int(220 * (1 - pulse * 0.3)))
@@ -2148,13 +2187,18 @@ class OverlayWindow(QWidget):
             painter.setPen(pen)
             painter.drawLine(mx - arm, my, mx + arm, my)
             painter.drawLine(mx, my - arm, mx, my + arm)
+            dot = QColor(c2.red(), c2.green(), c2.blue(), 230)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(dot)
+            painter.drawEllipse(self.mouse_local, 4, 4)
+
         elif style == "點+圓 (Dot+Ring)":
             radius = size + int(size * 0.6 * pulse)
             ring = QColor(c.red(), c.green(), c.blue(), int(180 * (1 - pulse)))
             painter.setPen(QPen(ring, 2))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(self.mouse_local, radius, radius)
-            dot = QColor(c.red(), c.green(), c.blue(), 220)
+            dot = QColor(c2.red(), c2.green(), c2.blue(), 230)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(dot)
             painter.drawEllipse(self.mouse_local, 5, 5)
