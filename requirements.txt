@@ -1,0 +1,3 @@
+PySide6>=6.7
+pywin32>=306
+websocket-client>=1.8
