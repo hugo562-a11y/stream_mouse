@@ -563,6 +563,7 @@ class AppSettings(QObject):
             "escape": {"vk": 27, "ctrl": False, "shift": False, "alt": False},
             "recording": {"vk": 112, "ctrl": True, "shift": False, "alt": False},
             "magnify": {"vk": 114, "ctrl": True, "shift": False, "alt": False},
+            "replay": {"vk": 116, "ctrl": True, "shift": False, "alt": False},
             "undo": {"vk": 90, "ctrl": True, "shift": False, "alt": False},
             "redo": {"vk": 90, "ctrl": True, "shift": True, "alt": False},
         }
@@ -1310,6 +1311,7 @@ class SettingsDialog(QDialog):
         self._hotkey_widgets: dict[str, QPushButton] = {}
         for action, label in [
             ("recording", "錄製切換"),
+            ("replay", "重播動畫"),
             ("magnify", "放大鏡/截圖"),
             ("escape", "返回一般模式"),
             ("undo", "放大繪圖還原 (Undo)"),
@@ -1429,6 +1431,7 @@ class SettingsDialog(QDialog):
         s.set_hotkey("escape", 27, False, False, False)
         s.set_hotkey("recording", 112, True, False, False)
         s.set_hotkey("magnify", 114, True, False, False)
+        s.set_hotkey("replay", 116, True, False, False)
         s.set_hotkey("undo", 90, True, False, False)
         s.set_hotkey("redo", 90, True, True, False)
         self._sync_ui()
@@ -1665,6 +1668,14 @@ class OverlayWindow(QWidget):
             self.recorded_points = []
             self._recorded_times = []
             self._recorded_waypoints = []
+        self.update()
+
+    def replay_animations(self) -> None:
+        if not self.paths:
+            return
+        now = time.time()
+        for i in range(len(self._path_anim_starts)):
+            self._path_anim_starts[i] = now
         self.update()
 
     def enter_magnify_mode(self) -> None:
@@ -2286,6 +2297,8 @@ class ControlWindow(QWidget):
                 self.overlay.take_screenshot()
             else:
                 self.overlay.enter_magnify_mode()
+        elif action == "replay":
+            self.overlay.replay_animations()
         elif action == "undo":
             self.overlay.undo()
         elif action == "redo":
