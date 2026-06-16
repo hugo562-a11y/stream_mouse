@@ -1,42 +1,135 @@
 # Stream Mouse Overlay
 
-Windows desktop overlay for screen recording, tutorials, live streams, and presentations.
+Windows 直播 / 錄影用透明覆蓋層，專為 OBS Studio 設計。  
+顯示鍵盤輸入、路徑動畫、放大鏡、遊標呼吸效果，全程不影響底層應用程式。
 
-## Install
+---
+
+## 安裝
+
+**需求：** Python 3.11+、Windows 10/11
 
 ```powershell
-python -m pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
-## Run
+## 執行
 
 ```powershell
 python stream_mouse.py
 ```
 
-Pick the monitor you want to use, then click **Start overlay**.
+選擇要覆蓋的螢幕，按 **Start overlay** 啟動。
 
-If OBS Studio has WebSocket enabled on the default `127.0.0.1:4455`, the keyboard HUD shows stream status and the current scene. If OBS WebSocket uses a password, set it before running:
+---
+
+## 功能總覽
+
+### 鍵盤 HUD
+- 浮動視窗顯示最近輸入的按鍵（方向鍵、Enter、Esc 等特殊鍵皆顯示）
+- 拖動 HUD 視窗到任意位置；滑鼠移開後背景自動隱藏
+- 右上角顯示 OBS 連線狀態：`LIVE` / 場景名稱 / `OFFLINE`
+
+### 路徑錄製與動畫
+
+| 操作 | 說明 |
+|------|------|
+| 按錄製快速鍵（預設 `Ctrl+F1`） | 開始錄製滑鼠軌跡 |
+| 再按一次 | 停止錄製，軌跡自動開始播放動畫 |
+| **錄製中按右鍵** | 插入中斷點 |
+| 按重播快速鍵（預設 `Ctrl+F5`） | 所有軌跡從頭重新播放 |
+
+播放效果：  
+- 彗星軌跡：尾端漸漸透明消失，頭部有方向圖示（飛機 / 箭頭 / 火箭）  
+- 遇到中斷點時暫停，停頓時間可在設定調整，再繼續下一段  
+- 中斷點位置顯示彩色圓點標記
+
+### 放大鏡
+
+| 操作 | 說明 |
+|------|------|
+| 放大鏡快速鍵（預設 `Ctrl+F3`） | 凍結畫面並進入放大模式 |
+| 滾輪 | 縮放（1x–6x） |
+| 滑鼠移動 | 在放大畫面上繪製筆跡 |
+| `Ctrl+Z` / `Ctrl+Shift+Z` | 還原 / 重做筆跡 |
+| 再按放大鏡快速鍵 | 截圖並儲存到桌面 |
+| `Esc` | 退出放大模式 |
+
+兩種放大樣式可選：
+- **全螢幕**：整個畫面放大，準心跟著滑鼠移動
+- **跟隨鏡頭 (Lens)**：圓形放大鏡跟著滑鼠，其他區域保持原樣
+
+### 遊標呼吸效果
+滑鼠游標周圍可顯示動態光圈，樣式可選：
+雙圓圈 / 單圓圈 / 十字線 / 點+圓 / 無
+
+---
+
+## 預設快速鍵
+
+| 快速鍵 | 功能 |
+|--------|------|
+| `Ctrl+F1` | 錄製切換（開始 / 停止） |
+| `Ctrl+F5` | 重播動畫 |
+| `Ctrl+F3` | 放大鏡 / 截圖 |
+| `Esc` | 返回一般模式（清除軌跡） |
+| `Ctrl+Z` | 放大繪圖還原 |
+| `Ctrl+Shift+Z` | 放大繪圖復原 |
+
+所有快速鍵可在設定視窗自訂。
+
+---
+
+## 設定
+
+點控制視窗的 **設定** 按鈕開啟，分五個頁籤：
+
+### 一般
+- HUD 文字區域大小、背景透明度
+- 字型、字體大小、文字顏色/透明度
+- 文字自動消失秒數（0 = 永不）
+
+### 放大鏡
+- 放大鏡樣式（全螢幕 / 跟隨鏡頭）
+- 進入時初始縮放倍率、鏡頭半徑
+- 縮放步進、閒置自動退出秒數
+- 準心樣式、大小、顏色/透明度
+
+### 遊標效果
+- 呼吸效果樣式、基礎半徑、速度、顏色
+
+### 路徑軌跡
+**軌跡外觀**
+- 頭部圖示：飛機 / 箭頭 / 火箭 / 無圖示
+- 圖示大小（8–60 px）
+- 軌跡長度（可見尾巴長度，20–2000 px）
+- 線條粗細、軌跡顏色
+
+**中斷點**
+- 停頓時間（0–5 秒）
+- 中斷點圓點大小（0 = 隱藏）、顏色
+
+### 快速鍵
+點按鈕後按下想要的組合鍵即可設定。
+
+---
+
+## OBS WebSocket
+
+OBS Studio 啟用 WebSocket（預設 `127.0.0.1:4455`）後，HUD 自動顯示串流狀態與場景名稱。
+
+若設有密碼：
 
 ```powershell
-$env:OBS_WEBSOCKET_PASSWORD="your-password"
+$env:OBS_WEBSOCKET_PASSWORD = "your-password"
 python stream_mouse.py
 ```
 
-## Shortcuts
+---
 
-- `Ctrl+F1`: start or stop mouse path recording. Stopping draws the path as a red dashed line.
-- `Ctrl+F2`: freeze the selected screen and enter drawing mode.
-- `Ctrl+F3`: enter magnifier mode.
-- `Esc`: return to normal mode and clear temporary freeze/magnifier state.
-- Drawing mode colors: `R` red, `Y` yellow, `G` green, `B` blue, `K` black, `W` white.
-- Mouse wheel in magnifier mode: zoom from 1x to 6x.
+## 注意事項
 
-## Notes
-
-- The tool targets Windows.
-- The overlay applies only to the monitor selected at startup.
-- Freeze mode uses a screenshot plus an input-capturing overlay. It does not pause the underlying application process.
-- The keyboard HUD displays recent typed input and special keys. Avoid running it while entering sensitive passwords or secrets.
-- The keyboard HUD can be dragged anywhere on the selected monitor. Its background appears only while the mouse is over it.
-- The OBS status badge shows `LIVE` and the current scene when OBS WebSocket is reachable; otherwise it shows `OFFLINE`.
+- 僅支援 Windows
+- 覆蓋層只套用在啟動時選擇的螢幕
+- 鍵盤 HUD 會顯示最近輸入，請勿在輸入密碼時使用
+- 截圖儲存至桌面，檔名格式：`stream_mouse_YYYYMMDD_HHMMSS.png`

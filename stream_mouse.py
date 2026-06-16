@@ -1272,7 +1272,7 @@ class SettingsDialog(QDialog):
         wp_group = QGroupBox("中斷點 (Waypoint)")
         wp_form = QFormLayout(wp_group)
 
-        wp_hint = QLabel("錄製中點左鍵 = 插入中斷點\n播放時依序停在每個中斷點")
+        wp_hint = QLabel("錄製中點右鍵 = 插入中斷點\n播放時依序停在每個中斷點")
         wp_hint.setStyleSheet("color: #aaa; font-size: 11px;")
         wp_form.addRow(wp_hint)
 
@@ -1633,12 +1633,12 @@ class OverlayWindow(QWidget):
                 if not self.recorded_points or manhattan(self.recorded_points[-1], self.mouse_local) >= 3:
                     self.recorded_points.append(QPoint(self.mouse_local))
                     self._recorded_times.append(time.time())
-                lb_down = bool(win32api.GetAsyncKeyState(win32con.VK_LBUTTON) & 0x8000)
-                if lb_down and not self._prev_lb and self.recorded_points:
+                rb_down = bool(win32api.GetAsyncKeyState(win32con.VK_RBUTTON) & 0x8000)
+                if rb_down and not self._prev_lb and self.recorded_points:
                     idx = len(self.recorded_points) - 1
                     if not self._recorded_waypoints or self._recorded_waypoints[-1] != idx:
                         self._recorded_waypoints.append(idx)
-                self._prev_lb = lb_down
+                self._prev_lb = rb_down
         if self.mode == Mode.MAGNIFY and self.settings.zoom_idle_timeout > 0:
             if time.time() - self._last_interaction_time > self.settings.zoom_idle_timeout:
                 self.return_to_normal()
