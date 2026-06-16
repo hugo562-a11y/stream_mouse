@@ -1855,16 +1855,27 @@ class OverlayWindow(QWidget):
         angle = math.degrees(math.atan2(dy, dx)) if (dx or dy) else 0.0
         self._paint_trail_icon(painter, head, angle, color)
 
-        # draw reached waypoint dots
+        # draw reached waypoint dots with numbers
         dot_r = self.settings.waypoint_dot_size
         if dot_r > 0:
             dc = self.settings.waypoint_dot_color
-            painter.setPen(QPen(QColor(0, 0, 0, 180), 1))
-            painter.setBrush(dc)
-            for wp_idx in wps:
+            font_size = max(7, dot_r - 2)
+            font = QFont()
+            font.setPixelSize(font_size)
+            font.setBold(True)
+            painter.setFont(font)
+            for n, wp_idx in enumerate(wps, start=1):
                 if wp_idx < limit and wp_idx < len(path):
                     pt = path[wp_idx]
+                    painter.setPen(QPen(QColor(0, 0, 0, 180), 1))
+                    painter.setBrush(dc)
                     painter.drawEllipse(pt, dot_r, dot_r)
+                    label = str(n)
+                    fm = painter.fontMetrics()
+                    tw = fm.horizontalAdvance(label)
+                    th = fm.ascent()
+                    painter.setPen(QColor(0, 0, 0, 220))
+                    painter.drawText(pt.x() - tw // 2, pt.y() + th // 2, label)
 
     def _paint_trail_icon(self, painter: QPainter, pos: QPoint, angle_deg: float, color: QColor) -> None:
         style = self.settings.trail_icon
