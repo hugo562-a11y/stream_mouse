@@ -34,9 +34,11 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSlider,
     QSpinBox,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -549,6 +551,14 @@ class AppSettings(QObject):
         self._pulse_size = 20
         self._pulse_speed = 1.0
         self._pulse_color = QColor(30, 120, 255)
+        self._trail_icon = "飛機 (Plane)"
+        self._trail_length = 200
+        self._trail_width = 3
+        self._trail_color = QColor(255, 80, 40)
+        self._trail_icon_size = 16
+        self._waypoint_pause = 0.5
+        self._waypoint_dot_size = 8
+        self._waypoint_dot_color = QColor(255, 220, 0)
         self._hotkeys = {
             "escape": {"vk": 27, "ctrl": False, "shift": False, "alt": False},
             "recording": {"vk": 112, "ctrl": True, "shift": False, "alt": False},
@@ -792,6 +802,86 @@ class AppSettings(QObject):
             self._pulse_color = v
             self._emit()
 
+    @property
+    def trail_icon(self) -> str:
+        return self._trail_icon
+
+    @trail_icon.setter
+    def trail_icon(self, v: str) -> None:
+        if self._trail_icon != v:
+            self._trail_icon = v
+            self._emit()
+
+    @property
+    def trail_length(self) -> int:
+        return self._trail_length
+
+    @trail_length.setter
+    def trail_length(self, v: int) -> None:
+        if self._trail_length != v:
+            self._trail_length = v
+            self._emit()
+
+    @property
+    def trail_width(self) -> int:
+        return self._trail_width
+
+    @trail_width.setter
+    def trail_width(self, v: int) -> None:
+        if self._trail_width != v:
+            self._trail_width = v
+            self._emit()
+
+    @property
+    def trail_color(self) -> QColor:
+        return self._trail_color
+
+    @trail_color.setter
+    def trail_color(self, v: QColor) -> None:
+        if self._trail_color != v:
+            self._trail_color = v
+            self._emit()
+
+    @property
+    def trail_icon_size(self) -> int:
+        return self._trail_icon_size
+
+    @trail_icon_size.setter
+    def trail_icon_size(self, v: int) -> None:
+        if self._trail_icon_size != v:
+            self._trail_icon_size = v
+            self._emit()
+
+    @property
+    def waypoint_pause(self) -> float:
+        return self._waypoint_pause
+
+    @waypoint_pause.setter
+    def waypoint_pause(self, v: float) -> None:
+        if self._waypoint_pause != v:
+            self._waypoint_pause = v
+            self._emit()
+
+    @property
+    def waypoint_dot_size(self) -> int:
+        return self._waypoint_dot_size
+
+    @waypoint_dot_size.setter
+    def waypoint_dot_size(self, v: int) -> None:
+        if self._waypoint_dot_size != v:
+            self._waypoint_dot_size = v
+            self._emit()
+
+    @property
+    def waypoint_dot_color(self) -> QColor:
+        return self._waypoint_dot_color
+
+    @waypoint_dot_color.setter
+    def waypoint_dot_color(self, v: QColor) -> None:
+        if self._waypoint_dot_color != v:
+            self._waypoint_dot_color = v
+            self._emit()
+
     def get_hotkey_text(self, action: str) -> str:
         hk = self._hotkeys.get(action)
         if hk is None:
@@ -834,6 +924,14 @@ class AppSettings(QObject):
         s.setValue("pulse_size", self._pulse_size)
         s.setValue("pulse_speed", self._pulse_speed)
         s.setValue("pulse_color", self._pulse_color.rgba())
+        s.setValue("trail_icon", self._trail_icon)
+        s.setValue("trail_length", self._trail_length)
+        s.setValue("trail_width", self._trail_width)
+        s.setValue("trail_color", self._trail_color.rgba())
+        s.setValue("trail_icon_size", self._trail_icon_size)
+        s.setValue("waypoint_pause", self._waypoint_pause)
+        s.setValue("waypoint_dot_size", self._waypoint_dot_size)
+        s.setValue("waypoint_dot_color", self._waypoint_dot_color.rgba())
         for action, hk in self._hotkeys.items():
             s.setValue(f"hotkey_{action}_vk", hk["vk"])
             s.setValue(f"hotkey_{action}_ctrl", hk["ctrl"])
@@ -871,6 +969,18 @@ class AppSettings(QObject):
         rgba_pulse = s.value("pulse_color")
         if rgba_pulse is not None:
             self._pulse_color = QColor.fromRgba(int(rgba_pulse))
+        self._trail_icon = str(s.value("trail_icon", self._trail_icon))
+        self._trail_length = int(s.value("trail_length", self._trail_length))
+        self._trail_width = int(s.value("trail_width", self._trail_width))
+        rgba_trail = s.value("trail_color")
+        if rgba_trail is not None:
+            self._trail_color = QColor.fromRgba(int(rgba_trail))
+        self._trail_icon_size = int(s.value("trail_icon_size", self._trail_icon_size))
+        self._waypoint_pause = float(s.value("waypoint_pause", self._waypoint_pause))
+        self._waypoint_dot_size = int(s.value("waypoint_dot_size", self._waypoint_dot_size))
+        rgba_wp = s.value("waypoint_dot_color")
+        if rgba_wp is not None:
+            self._waypoint_dot_color = QColor.fromRgba(int(rgba_wp))
         for action in self._hotkeys:
             vk = s.value(f"hotkey_{action}_vk")
             if vk is not None:
@@ -904,6 +1014,13 @@ PULSE_STYLES = [
     "無 (None)",
 ]
 
+TRAIL_ICONS = [
+    "飛機 (Plane)",
+    "箭頭 (Arrow)",
+    "火箭 (Rocket)",
+    "無圖示 (None)",
+]
+
 
 class SettingsDialog(QDialog):
     hotkey_listening = Signal(str)
@@ -912,31 +1029,20 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.settings = settings
         self.setWindowTitle("設定")
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(480)
         self._listening_action: str | None = None
         self._listening_button: QPushButton | None = None
 
-        layout = QVBoxLayout(self)
+        root = QVBoxLayout(self)
+        tabs = QTabWidget()
+        root.addWidget(tabs)
 
-        general_group = QGroupBox("一般設定")
-        general_layout = QFormLayout(general_group)
+        # ── Tab 1: 一般 ──────────────────────────────────────────────
+        tab_general = QWidget()
+        tg_layout = QVBoxLayout(tab_general)
 
-        self.line_width_spin = QSpinBox()
-        self.line_width_spin.setRange(1, 50)
-        self.line_width_spin.setValue(settings.line_width)
-        self.line_width_spin.valueChanged.connect(lambda v: setattr(settings, "line_width", v))
-        general_layout.addRow("路徑線條粗細:", self.line_width_spin)
-
-        self.stroke_width_spin = QSpinBox()
-        self.stroke_width_spin.setRange(1, 50)
-        self.stroke_width_spin.setValue(settings.stroke_width)
-        self.stroke_width_spin.valueChanged.connect(lambda v: setattr(settings, "stroke_width", v))
-        general_layout.addRow("放大繪圖筆畫粗細:", self.stroke_width_spin)
-
-        layout.addWidget(general_group)
-
-        text_group = QGroupBox("文字區域 (HUD)")
-        text_layout = QFormLayout(text_group)
+        hud_group = QGroupBox("文字區域 (HUD)")
+        hud_form = QFormLayout(hud_group)
 
         size_row = QHBoxLayout()
         self.hud_width_spin = QSpinBox()
@@ -951,180 +1057,252 @@ class SettingsDialog(QDialog):
         self.hud_height_spin.valueChanged.connect(lambda v: setattr(settings, "hud_height", v))
         size_row.addWidget(QLabel("高度:"))
         size_row.addWidget(self.hud_height_spin)
-        text_layout.addRow("區域:", size_row)
+        hud_form.addRow("區域:", size_row)
 
         self.hud_bg_slider = QSlider(Qt.Orientation.Horizontal)
         self.hud_bg_slider.setRange(0, 100)
         self.hud_bg_slider.setValue(settings.hud_bg_alpha * 100 // 255)
-        self.hud_bg_slider.valueChanged.connect(
-            lambda v: setattr(settings, "hud_bg_alpha", v * 255 // 100)
-        )
-        text_layout.addRow("背景透明度:", self.hud_bg_slider)
+        self.hud_bg_slider.valueChanged.connect(lambda v: setattr(settings, "hud_bg_alpha", v * 255 // 100))
+        hud_form.addRow("背景透明度:", self.hud_bg_slider)
 
         self.font_combo = QComboBox()
         self.font_combo.setEditable(True)
         import platform
-        if platform.system() == "Windows":
-            self.font_combo.addItems([
-                "Cascadia Mono", "Consolas", "Courier New", "Microsoft JhengHei",
-                "Segoe UI", "Arial", "YaHei Consolas Hybrid",
-            ])
-        else:
-            self.font_combo.addItems(["monospace", "sans-serif", "serif"])
+        self.font_combo.addItems(
+            ["Cascadia Mono", "Consolas", "Courier New", "Microsoft JhengHei", "Segoe UI", "Arial"]
+            if platform.system() == "Windows" else ["monospace", "sans-serif", "serif"]
+        )
         idx = self.font_combo.findText(settings.hud_font_family)
         if idx >= 0:
             self.font_combo.setCurrentIndex(idx)
         else:
             self.font_combo.setCurrentText(settings.hud_font_family)
         self.font_combo.currentTextChanged.connect(lambda v: setattr(settings, "hud_font_family", v))
-        text_layout.addRow("字型:", self.font_combo)
+        hud_form.addRow("字型:", self.font_combo)
 
         self.font_size_spin = QSpinBox()
         self.font_size_spin.setRange(8, 120)
         self.font_size_spin.setValue(settings.hud_font_size)
         self.font_size_spin.valueChanged.connect(lambda v: setattr(settings, "hud_font_size", v))
-        text_layout.addRow("字體大小:", self.font_size_spin)
+        hud_form.addRow("字體大小:", self.font_size_spin)
 
-        color_row = QHBoxLayout()
+        text_color_row = QHBoxLayout()
         self.text_color_btn = QPushButton()
         self._update_color_button(self.text_color_btn, settings.hud_text_color)
         self.text_color_btn.clicked.connect(self._pick_text_color)
-        color_row.addWidget(self.text_color_btn)
+        text_color_row.addWidget(self.text_color_btn)
         self.text_alpha_slider = QSlider(Qt.Orientation.Horizontal)
         self.text_alpha_slider.setRange(0, 100)
         self.text_alpha_slider.setValue(settings.hud_text_alpha * 100 // 255)
-        self.text_alpha_slider.valueChanged.connect(
-            lambda v: setattr(settings, "hud_text_alpha", v * 255 // 100)
-        )
-        color_row.addWidget(self.text_alpha_slider)
-        text_layout.addRow("文字顏色/透明度:", color_row)
+        self.text_alpha_slider.valueChanged.connect(lambda v: setattr(settings, "hud_text_alpha", v * 255 // 100))
+        text_color_row.addWidget(self.text_alpha_slider)
+        hud_form.addRow("文字顏色/透明度:", text_color_row)
 
         self.text_disappear_spin = QSpinBox()
         self.text_disappear_spin.setRange(0, 999)
         self.text_disappear_spin.setSuffix(" 秒")
         self.text_disappear_spin.setSpecialValueText("永不")
         self.text_disappear_spin.setValue(settings.text_disappear_secs)
-        self.text_disappear_spin.valueChanged.connect(
-            lambda v: setattr(settings, "text_disappear_secs", v)
-        )
-        text_layout.addRow("文字自動消失:", self.text_disappear_spin)
+        self.text_disappear_spin.valueChanged.connect(lambda v: setattr(settings, "text_disappear_secs", v))
+        hud_form.addRow("文字自動消失:", self.text_disappear_spin)
 
-        layout.addWidget(text_group)
+        tg_layout.addWidget(hud_group)
+        tg_layout.addStretch()
+        tabs.addTab(tab_general, "一般")
 
-        magnifier_group = QGroupBox("放大鏡")
-        magnifier_layout = QFormLayout(magnifier_group)
+        # ── Tab 2: 放大鏡 ────────────────────────────────────────────
+        tab_mag = QWidget()
+        tm_layout = QVBoxLayout(tab_mag)
+
+        mag_group = QGroupBox("放大鏡")
+        mag_form = QFormLayout(mag_group)
 
         self.magnify_style_combo = QComboBox()
         self.magnify_style_combo.addItems(MAGNIFY_STYLES)
         idx_ms = self.magnify_style_combo.findText(settings.magnify_style)
         if idx_ms >= 0:
             self.magnify_style_combo.setCurrentIndex(idx_ms)
-        self.magnify_style_combo.currentTextChanged.connect(
-            lambda v: setattr(settings, "magnify_style", v)
-        )
-        magnifier_layout.addRow("放大鏡樣式:", self.magnify_style_combo)
+        self.magnify_style_combo.currentTextChanged.connect(lambda v: setattr(settings, "magnify_style", v))
+        mag_form.addRow("樣式:", self.magnify_style_combo)
 
         self.magnify_start_zoom_spin = QDoubleSpinBox()
         self.magnify_start_zoom_spin.setRange(1.0, 6.0)
         self.magnify_start_zoom_spin.setSingleStep(0.25)
         self.magnify_start_zoom_spin.setValue(settings.magnify_start_zoom)
-        self.magnify_start_zoom_spin.valueChanged.connect(
-            lambda v: setattr(settings, "magnify_start_zoom", v)
-        )
-        magnifier_layout.addRow("進入初始縮放:", self.magnify_start_zoom_spin)
+        self.magnify_start_zoom_spin.valueChanged.connect(lambda v: setattr(settings, "magnify_start_zoom", v))
+        mag_form.addRow("進入初始縮放:", self.magnify_start_zoom_spin)
 
         self.lens_radius_spin = QSpinBox()
         self.lens_radius_spin.setRange(50, 600)
         self.lens_radius_spin.setSuffix(" px")
         self.lens_radius_spin.setValue(settings.lens_radius)
-        self.lens_radius_spin.valueChanged.connect(
-            lambda v: setattr(settings, "lens_radius", v)
-        )
-        magnifier_layout.addRow("鏡頭半徑 (Lens):", self.lens_radius_spin)
+        self.lens_radius_spin.valueChanged.connect(lambda v: setattr(settings, "lens_radius", v))
+        mag_form.addRow("鏡頭半徑:", self.lens_radius_spin)
 
         self.zoom_step_spin = QDoubleSpinBox()
         self.zoom_step_spin.setRange(0.05, 2.0)
         self.zoom_step_spin.setSingleStep(0.05)
         self.zoom_step_spin.setValue(settings.zoom_step)
         self.zoom_step_spin.valueChanged.connect(lambda v: setattr(settings, "zoom_step", v))
-        magnifier_layout.addRow("縮放步進:", self.zoom_step_spin)
+        mag_form.addRow("縮放步進:", self.zoom_step_spin)
 
         self.zoom_idle_spin = QSpinBox()
         self.zoom_idle_spin.setRange(0, 300)
         self.zoom_idle_spin.setSuffix(" 秒")
         self.zoom_idle_spin.setSpecialValueText("永不")
         self.zoom_idle_spin.setValue(settings.zoom_idle_timeout)
-        self.zoom_idle_spin.valueChanged.connect(
-            lambda v: setattr(settings, "zoom_idle_timeout", v)
-        )
-        magnifier_layout.addRow("閒置自動退出:", self.zoom_idle_spin)
+        self.zoom_idle_spin.valueChanged.connect(lambda v: setattr(settings, "zoom_idle_timeout", v))
+        mag_form.addRow("閒置自動退出:", self.zoom_idle_spin)
+
+        tm_layout.addWidget(mag_group)
+
+        xhair_group = QGroupBox("準心 (Crosshair)")
+        xhair_form = QFormLayout(xhair_group)
 
         self.crosshair_style_combo = QComboBox()
         self.crosshair_style_combo.addItems(CROSSHAIR_STYLES)
         idx2 = self.crosshair_style_combo.findText(settings.crosshair_style)
         if idx2 >= 0:
             self.crosshair_style_combo.setCurrentIndex(idx2)
-        self.crosshair_style_combo.currentTextChanged.connect(
-            lambda v: setattr(settings, "crosshair_style", v)
-        )
-        magnifier_layout.addRow("準心樣式:", self.crosshair_style_combo)
+        self.crosshair_style_combo.currentTextChanged.connect(lambda v: setattr(settings, "crosshair_style", v))
+        xhair_form.addRow("樣式:", self.crosshair_style_combo)
 
         self.crosshair_size_spin = QSpinBox()
         self.crosshair_size_spin.setRange(2, 100)
         self.crosshair_size_spin.setValue(settings.crosshair_size)
-        self.crosshair_size_spin.valueChanged.connect(
-            lambda v: setattr(settings, "crosshair_size", v)
-        )
-        magnifier_layout.addRow("準心大小:", self.crosshair_size_spin)
+        self.crosshair_size_spin.valueChanged.connect(lambda v: setattr(settings, "crosshair_size", v))
+        xhair_form.addRow("大小:", self.crosshair_size_spin)
 
-        crosshair_color_row = QHBoxLayout()
+        xhair_color_row = QHBoxLayout()
         self.crosshair_color_btn = QPushButton()
         self._update_color_button(self.crosshair_color_btn, settings.crosshair_color)
         self.crosshair_color_btn.clicked.connect(self._pick_crosshair_color)
-        crosshair_color_row.addWidget(self.crosshair_color_btn)
+        xhair_color_row.addWidget(self.crosshair_color_btn)
         self.crosshair_alpha_slider = QSlider(Qt.Orientation.Horizontal)
         self.crosshair_alpha_slider.setRange(0, 100)
         self.crosshair_alpha_slider.setValue(settings.crosshair_alpha * 100 // 255)
-        self.crosshair_alpha_slider.valueChanged.connect(
-            lambda v: setattr(settings, "crosshair_alpha", v * 255 // 100)
-        )
-        crosshair_color_row.addWidget(self.crosshair_alpha_slider)
-        magnifier_layout.addRow("準心顏色/透明度:", crosshair_color_row)
+        self.crosshair_alpha_slider.valueChanged.connect(lambda v: setattr(settings, "crosshair_alpha", v * 255 // 100))
+        xhair_color_row.addWidget(self.crosshair_alpha_slider)
+        xhair_form.addRow("顏色/透明度:", xhair_color_row)
 
-        layout.addWidget(magnifier_group)
+        tm_layout.addWidget(xhair_group)
+        tm_layout.addStretch()
+        tabs.addTab(tab_mag, "放大鏡")
 
-        cursor_group = QGroupBox("遊標 (呼吸效果)")
-        cursor_layout = QFormLayout(cursor_group)
+        # ── Tab 3: 遊標效果 ──────────────────────────────────────────
+        tab_cursor = QWidget()
+        tc_layout = QVBoxLayout(tab_cursor)
+
+        pulse_group = QGroupBox("呼吸效果")
+        pulse_form = QFormLayout(pulse_group)
 
         self.pulse_style_combo = QComboBox()
         self.pulse_style_combo.addItems(PULSE_STYLES)
         idx_ps = self.pulse_style_combo.findText(settings.pulse_style)
         if idx_ps >= 0:
             self.pulse_style_combo.setCurrentIndex(idx_ps)
-        self.pulse_style_combo.currentTextChanged.connect(
-            lambda v: setattr(settings, "pulse_style", v)
-        )
-        cursor_layout.addRow("樣式:", self.pulse_style_combo)
+        self.pulse_style_combo.currentTextChanged.connect(lambda v: setattr(settings, "pulse_style", v))
+        pulse_form.addRow("樣式:", self.pulse_style_combo)
 
         self.pulse_size_spin = QSpinBox()
         self.pulse_size_spin.setRange(4, 120)
         self.pulse_size_spin.setValue(settings.pulse_size)
         self.pulse_size_spin.valueChanged.connect(lambda v: setattr(settings, "pulse_size", v))
-        cursor_layout.addRow("大小 (基礎半徑):", self.pulse_size_spin)
+        pulse_form.addRow("大小 (基礎半徑):", self.pulse_size_spin)
 
         self.pulse_speed_spin = QDoubleSpinBox()
         self.pulse_speed_spin.setRange(0.1, 5.0)
         self.pulse_speed_spin.setSingleStep(0.1)
         self.pulse_speed_spin.setValue(settings.pulse_speed)
         self.pulse_speed_spin.valueChanged.connect(lambda v: setattr(settings, "pulse_speed", v))
-        cursor_layout.addRow("速度:", self.pulse_speed_spin)
+        pulse_form.addRow("速度:", self.pulse_speed_spin)
 
         self.pulse_color_btn = QPushButton()
         self._update_color_button(self.pulse_color_btn, settings.pulse_color)
         self.pulse_color_btn.clicked.connect(self._pick_pulse_color)
-        cursor_layout.addRow("顏色:", self.pulse_color_btn)
+        pulse_form.addRow("顏色:", self.pulse_color_btn)
 
-        layout.addWidget(cursor_group)
+        tc_layout.addWidget(pulse_group)
+        tc_layout.addStretch()
+        tabs.addTab(tab_cursor, "遊標效果")
+
+        # ── Tab 4: 路徑軌跡 ──────────────────────────────────────────
+        tab_trail = QWidget()
+        tt_layout = QVBoxLayout(tab_trail)
+
+        trail_group = QGroupBox("軌跡外觀")
+        trail_form = QFormLayout(trail_group)
+
+        self.trail_icon_combo = QComboBox()
+        self.trail_icon_combo.addItems(TRAIL_ICONS)
+        idx_ti = self.trail_icon_combo.findText(settings.trail_icon)
+        if idx_ti >= 0:
+            self.trail_icon_combo.setCurrentIndex(idx_ti)
+        self.trail_icon_combo.currentTextChanged.connect(lambda v: setattr(settings, "trail_icon", v))
+        trail_form.addRow("頭部圖示:", self.trail_icon_combo)
+
+        self.trail_icon_size_spin = QSpinBox()
+        self.trail_icon_size_spin.setRange(8, 60)
+        self.trail_icon_size_spin.setSuffix(" px")
+        self.trail_icon_size_spin.setValue(settings.trail_icon_size)
+        self.trail_icon_size_spin.valueChanged.connect(lambda v: setattr(settings, "trail_icon_size", v))
+        trail_form.addRow("圖示大小:", self.trail_icon_size_spin)
+
+        self.trail_length_spin = QSpinBox()
+        self.trail_length_spin.setRange(20, 2000)
+        self.trail_length_spin.setSuffix(" px")
+        self.trail_length_spin.setValue(settings.trail_length)
+        self.trail_length_spin.valueChanged.connect(lambda v: setattr(settings, "trail_length", v))
+        trail_form.addRow("軌跡長度:", self.trail_length_spin)
+
+        self.trail_width_spin = QSpinBox()
+        self.trail_width_spin.setRange(1, 20)
+        self.trail_width_spin.setValue(settings.trail_width)
+        self.trail_width_spin.valueChanged.connect(lambda v: setattr(settings, "trail_width", v))
+        trail_form.addRow("線條粗細:", self.trail_width_spin)
+
+        self.trail_color_btn = QPushButton()
+        self._update_color_button(self.trail_color_btn, settings.trail_color)
+        self.trail_color_btn.clicked.connect(self._pick_trail_color)
+        trail_form.addRow("軌跡顏色:", self.trail_color_btn)
+
+        tt_layout.addWidget(trail_group)
+
+        wp_group = QGroupBox("中斷點 (Waypoint)")
+        wp_form = QFormLayout(wp_group)
+
+        wp_hint = QLabel("錄製中點左鍵 = 插入中斷點\n播放時依序停在每個中斷點")
+        wp_hint.setStyleSheet("color: #aaa; font-size: 11px;")
+        wp_form.addRow(wp_hint)
+
+        self.waypoint_pause_spin = QDoubleSpinBox()
+        self.waypoint_pause_spin.setRange(0.0, 5.0)
+        self.waypoint_pause_spin.setSingleStep(0.1)
+        self.waypoint_pause_spin.setSuffix(" 秒")
+        self.waypoint_pause_spin.setValue(settings.waypoint_pause)
+        self.waypoint_pause_spin.valueChanged.connect(lambda v: setattr(settings, "waypoint_pause", v))
+        wp_form.addRow("停頓時間:", self.waypoint_pause_spin)
+
+        self.waypoint_dot_size_spin = QSpinBox()
+        self.waypoint_dot_size_spin.setRange(0, 30)
+        self.waypoint_dot_size_spin.setSuffix(" px")
+        self.waypoint_dot_size_spin.setSpecialValueText("隱藏")
+        self.waypoint_dot_size_spin.setValue(settings.waypoint_dot_size)
+        self.waypoint_dot_size_spin.valueChanged.connect(lambda v: setattr(settings, "waypoint_dot_size", v))
+        wp_form.addRow("中斷點大小:", self.waypoint_dot_size_spin)
+
+        self.waypoint_dot_color_btn = QPushButton()
+        self._update_color_button(self.waypoint_dot_color_btn, settings.waypoint_dot_color)
+        self.waypoint_dot_color_btn.clicked.connect(self._pick_waypoint_dot_color)
+        wp_form.addRow("中斷點顏色:", self.waypoint_dot_color_btn)
+
+        tt_layout.addWidget(wp_group)
+        tt_layout.addStretch()
+        tabs.addTab(tab_trail, "路徑軌跡")
+
+        # ── Tab 5: 快速鍵 ────────────────────────────────────────────
+        tab_hk = QWidget()
+        thk_layout = QVBoxLayout(tab_hk)
 
         hotkeys_group = QGroupBox("快速鍵")
         hotkeys_layout = QFormLayout(hotkeys_group)
@@ -1146,8 +1324,11 @@ class SettingsDialog(QDialog):
             hotkeys_layout.addRow(f"{label}:", row)
             self._hotkey_widgets[action] = btn
 
-        layout.addWidget(hotkeys_group)
+        thk_layout.addWidget(hotkeys_group)
+        thk_layout.addStretch()
+        tabs.addTab(tab_hk, "快速鍵")
 
+        # ── 底部按鈕 ─────────────────────────────────────────────────
         btn_row = QHBoxLayout()
         reset_btn = QPushButton("重設預設")
         reset_btn.clicked.connect(self._reset_defaults)
@@ -1156,7 +1337,7 @@ class SettingsDialog(QDialog):
         btn_row.addWidget(reset_btn)
         btn_row.addStretch()
         btn_row.addWidget(close_btn)
-        layout.addLayout(btn_row)
+        root.addLayout(btn_row)
 
     def _update_color_button(self, btn: QPushButton, color: QColor) -> None:
         btn.setStyleSheet(
@@ -1184,6 +1365,18 @@ class SettingsDialog(QDialog):
             self.settings.pulse_color = color
             self._update_color_button(self.pulse_color_btn, color)
 
+    def _pick_trail_color(self) -> None:
+        color = QColorDialog.getColor(self.settings.trail_color, self, "選擇軌跡顏色")
+        if color.isValid():
+            self.settings.trail_color = color
+            self._update_color_button(self.trail_color_btn, color)
+
+    def _pick_waypoint_dot_color(self) -> None:
+        color = QColorDialog.getColor(self.settings.waypoint_dot_color, self, "選擇中斷點顏色")
+        if color.isValid():
+            self.settings.waypoint_dot_color = color
+            self._update_color_button(self.waypoint_dot_color_btn, color)
+
     def _start_listening(self, action: str, button: QPushButton) -> None:
         self._listening_action = action
         self._listening_button = button
@@ -1203,7 +1396,6 @@ class SettingsDialog(QDialog):
 
     def _reset_defaults(self) -> None:
         s = self.settings
-        s.line_width = 4
         s.stroke_width = 5
         s.hud_width = 430
         s.hud_height = 78
@@ -1220,6 +1412,14 @@ class SettingsDialog(QDialog):
         s.pulse_size = 20
         s.pulse_speed = 1.0
         s.pulse_color = QColor(30, 120, 255)
+        s.trail_icon = "飛機 (Plane)"
+        s.trail_length = 200
+        s.trail_width = 3
+        s.trail_color = QColor(255, 80, 40)
+        s.trail_icon_size = 16
+        s.waypoint_pause = 0.5
+        s.waypoint_dot_size = 8
+        s.waypoint_dot_color = QColor(255, 220, 0)
         s.zoom_step = 0.25
         s.zoom_idle_timeout = 0
         s.crosshair_style = "十字線 (Crosshair)"
@@ -1235,10 +1435,6 @@ class SettingsDialog(QDialog):
 
     def _sync_ui(self) -> None:
         s = self.settings
-        self.line_width_spin.blockSignals(True)
-        self.line_width_spin.setValue(s.line_width)
-        self.line_width_spin.blockSignals(False)
-
         self.stroke_width_spin.blockSignals(True)
         self.stroke_width_spin.setValue(s.stroke_width)
         self.stroke_width_spin.blockSignals(False)
@@ -1325,9 +1521,37 @@ class SettingsDialog(QDialog):
         self.pulse_speed_spin.setValue(s.pulse_speed)
         self.pulse_speed_spin.blockSignals(False)
 
+        self.trail_icon_combo.blockSignals(True)
+        idx_ti = self.trail_icon_combo.findText(s.trail_icon)
+        if idx_ti >= 0:
+            self.trail_icon_combo.setCurrentIndex(idx_ti)
+        self.trail_icon_combo.blockSignals(False)
+
+        self.trail_icon_size_spin.blockSignals(True)
+        self.trail_icon_size_spin.setValue(s.trail_icon_size)
+        self.trail_icon_size_spin.blockSignals(False)
+
+        self.trail_length_spin.blockSignals(True)
+        self.trail_length_spin.setValue(s.trail_length)
+        self.trail_length_spin.blockSignals(False)
+
+        self.trail_width_spin.blockSignals(True)
+        self.trail_width_spin.setValue(s.trail_width)
+        self.trail_width_spin.blockSignals(False)
+
+        self.waypoint_pause_spin.blockSignals(True)
+        self.waypoint_pause_spin.setValue(s.waypoint_pause)
+        self.waypoint_pause_spin.blockSignals(False)
+
+        self.waypoint_dot_size_spin.blockSignals(True)
+        self.waypoint_dot_size_spin.setValue(s.waypoint_dot_size)
+        self.waypoint_dot_size_spin.blockSignals(False)
+
         self._update_color_button(self.text_color_btn, s.hud_text_color)
         self._update_color_button(self.crosshair_color_btn, s.crosshair_color)
         self._update_color_button(self.pulse_color_btn, s.pulse_color)
+        self._update_color_button(self.trail_color_btn, s.trail_color)
+        self._update_color_button(self.waypoint_dot_color_btn, s.waypoint_dot_color)
         for action, btn in self._hotkey_widgets.items():
             btn.setText(s.get_hotkey_text(action))
 
@@ -1351,9 +1575,12 @@ class OverlayWindow(QWidget):
         self.recording = False
         self.recorded_points: list[QPoint] = []
         self._recorded_times: list[float] = []
+        self._recorded_waypoints: list[int] = []
+        self._prev_lb = False
         self.paths: list[list[QPoint]] = []
         self._path_times: list[list[float]] = []
         self._path_anim_starts: list[float] = []
+        self._path_waypoints: list[list[int]] = []
         self.draw_color = QColor(255, 70, 70)
         self.freeze_pixmap: QPixmap | None = None
         self.zoom = 3.0
@@ -1403,6 +1630,12 @@ class OverlayWindow(QWidget):
                 if not self.recorded_points or manhattan(self.recorded_points[-1], self.mouse_local) >= 3:
                     self.recorded_points.append(QPoint(self.mouse_local))
                     self._recorded_times.append(time.time())
+                lb_down = bool(win32api.GetAsyncKeyState(win32con.VK_LBUTTON) & 0x8000)
+                if lb_down and not self._prev_lb and self.recorded_points:
+                    idx = len(self.recorded_points) - 1
+                    if not self._recorded_waypoints or self._recorded_waypoints[-1] != idx:
+                        self._recorded_waypoints.append(idx)
+                self._prev_lb = lb_down
         if self.mode == Mode.MAGNIFY and self.settings.zoom_idle_timeout > 0:
             if time.time() - self._last_interaction_time > self.settings.zoom_idle_timeout:
                 self.return_to_normal()
@@ -1419,6 +1652,8 @@ class OverlayWindow(QWidget):
             self.recording = True
             self.recorded_points = []
             self._recorded_times = []
+            self._recorded_waypoints = []
+            self._prev_lb = False
         else:
             self.recording = False
             if len(self.recorded_points) > 1:
@@ -1426,8 +1661,10 @@ class OverlayWindow(QWidget):
                 t0 = self._recorded_times[0]
                 self._path_times.append([t - t0 for t in self._recorded_times])
                 self._path_anim_starts.append(time.time())
+                self._path_waypoints.append(list(self._recorded_waypoints))
             self.recorded_points = []
             self._recorded_times = []
+            self._recorded_waypoints = []
         self.update()
 
     def enter_magnify_mode(self) -> None:
@@ -1450,9 +1687,11 @@ class OverlayWindow(QWidget):
         self.recording = False
         self.recorded_points = []
         self._recorded_times = []
+        self._recorded_waypoints = []
         self.paths.clear()
         self._path_times.clear()
         self._path_anim_starts.clear()
+        self._path_waypoints.clear()
         self._magnify_strokes.clear()
         self._magnify_active = None
         self._magnify_redo.clear()
@@ -1515,30 +1754,195 @@ class OverlayWindow(QWidget):
             self._paint_mode_badge(painter, "REC")
         self._paint_pulse(painter)
 
+    def _trail_limit(self, path_idx: int, elapsed: float) -> int:
+        path = self.paths[path_idx]
+        times = self._path_times[path_idx]
+        wps: list[int] = self._path_waypoints[path_idx] if path_idx < len(self._path_waypoints) else []
+        pause = self.settings.waypoint_pause
+
+        seg_boundaries = [0] + wps + [len(path) - 1]
+        accumulated = 0.0
+        for k in range(len(seg_boundaries) - 1):
+            s_start = seg_boundaries[k]
+            s_end = seg_boundaries[k + 1]
+            seg_dur = times[s_end] - times[s_start]
+
+            if elapsed < accumulated + seg_dur:
+                t_in_seg = elapsed - accumulated
+                local_times = [t - times[s_start] for t in times[s_start: s_end + 1]]
+                lim = bisect.bisect_right(local_times, t_in_seg)
+                return max(s_start + 1, min(s_start + lim, s_end + 1))
+
+            accumulated += seg_dur
+
+            if k < len(seg_boundaries) - 2:
+                if elapsed < accumulated + pause:
+                    return s_end + 1
+                accumulated += pause
+
+        return len(path)
+
     def _paint_paths(self, painter: QPainter) -> None:
         now = time.time()
         for i, path in enumerate(self.paths):
             if i < len(self._path_times) and i < len(self._path_anim_starts):
                 elapsed = now - self._path_anim_starts[i]
-                times = self._path_times[i]
-                limit = bisect.bisect_right(times, elapsed)
-                limit = max(2, min(limit, len(path)))
+                limit = self._trail_limit(i, elapsed)
             else:
                 limit = len(path)
-            self._paint_path(painter, path[:limit], QColor(255, 30, 30), dashed=True)
+            wps = self._path_waypoints[i] if i < len(self._path_waypoints) else []
+            self._paint_trail(painter, path, limit, wps)
 
-    def _paint_path(self, painter: QPainter, path: list[QPoint], color: QColor, dashed: bool) -> None:
-        if len(path) < 2:
+    def _paint_trail(self, painter: QPainter, path: list[QPoint], limit: int, wps: list[int]) -> None:
+        if limit < 2:
             return
-        pen = QPen(color, self.settings.line_width)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        if dashed:
-            pen.setStyle(Qt.PenStyle.DashLine)
-            pen.setDashPattern([7, 8])
-        painter.setPen(pen)
-        for p1, p2 in zip(path, path[1:]):
+        active = path[:limit]
+        trail_px = self.settings.trail_length
+        tw = self.settings.trail_width
+        color = self.settings.trail_color
+
+        # build cumulative arc distances for active portion
+        dists: list[float] = [0.0]
+        for a, b in zip(active, active[1:]):
+            dists.append(dists[-1] + math.hypot(b.x() - a.x(), b.y() - a.y()))
+        total = dists[-1]
+
+        # find where the visible tail starts
+        tail_dist = max(0.0, total - trail_px)
+        tail_idx = max(0, bisect.bisect_right(dists, tail_dist) - 1)
+
+        # interpolate exact tail start point
+        if tail_idx + 1 < len(active) and dists[tail_idx + 1] > dists[tail_idx]:
+            t = (tail_dist - dists[tail_idx]) / (dists[tail_idx + 1] - dists[tail_idx])
+            tx = active[tail_idx].x() + t * (active[tail_idx + 1].x() - active[tail_idx].x())
+            ty = active[tail_idx].y() + t * (active[tail_idx + 1].y() - active[tail_idx].y())
+            visible = [QPoint(int(tx), int(ty))] + list(active[tail_idx + 1:])
+        else:
+            visible = list(active[tail_idx:])
+
+        n = len(visible) - 1
+        if n < 1:
+            return
+
+        # draw each segment with fading alpha (tail transparent → head opaque)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        for j, (p1, p2) in enumerate(zip(visible, visible[1:])):
+            frac = (j + 1) / n
+            alpha = int(frac * 230)
+            c = QColor(color.red(), color.green(), color.blue(), alpha)
+            pen = QPen(c, tw)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.setPen(pen)
             painter.drawLine(p1, p2)
+
+        # draw directional icon at head
+        head = active[-1]
+        look_back = min(6, len(active) - 1)
+        ref = active[-1 - look_back]
+        dx = head.x() - ref.x()
+        dy = head.y() - ref.y()
+        angle = math.degrees(math.atan2(dy, dx)) if (dx or dy) else 0.0
+        self._paint_trail_icon(painter, head, angle, color)
+
+        # draw reached waypoint dots
+        dot_r = self.settings.waypoint_dot_size
+        if dot_r > 0:
+            dc = self.settings.waypoint_dot_color
+            painter.setPen(QPen(QColor(0, 0, 0, 180), 1))
+            painter.setBrush(dc)
+            for wp_idx in wps:
+                if wp_idx < limit and wp_idx < len(path):
+                    pt = path[wp_idx]
+                    painter.drawEllipse(pt, dot_r, dot_r)
+
+    def _paint_trail_icon(self, painter: QPainter, pos: QPoint, angle_deg: float, color: QColor) -> None:
+        style = self.settings.trail_icon
+        if style == "無圖示 (None)":
+            return
+        s = float(self.settings.trail_icon_size)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.translate(pos)
+        painter.rotate(angle_deg)
+
+        icon_path = QPainterPath()
+        if style == "箭頭 (Arrow)":
+            icon_path.moveTo(s, 0)
+            icon_path.lineTo(0, -s * 0.5)
+            icon_path.lineTo(0, -s * 0.2)
+            icon_path.lineTo(-s * 0.65, -s * 0.2)
+            icon_path.lineTo(-s * 0.65, s * 0.2)
+            icon_path.lineTo(0, s * 0.2)
+            icon_path.lineTo(0, s * 0.5)
+            icon_path.closeSubpath()
+        elif style == "飛機 (Plane)":
+            body = QPainterPath()
+            body.moveTo(s * 0.9, 0)
+            body.lineTo(s * 0.3, -s * 0.13)
+            body.lineTo(-s * 0.55, -s * 0.13)
+            body.lineTo(-s * 0.75, 0)
+            body.lineTo(-s * 0.55, s * 0.13)
+            body.lineTo(s * 0.3, s * 0.13)
+            body.closeSubpath()
+
+            wing_t = QPainterPath()
+            wing_t.moveTo(s * 0.1, -s * 0.13)
+            wing_t.lineTo(-s * 0.15, -s * 0.6)
+            wing_t.lineTo(-s * 0.42, -s * 0.6)
+            wing_t.lineTo(-s * 0.42, -s * 0.13)
+            wing_t.closeSubpath()
+
+            wing_b = QPainterPath()
+            wing_b.moveTo(s * 0.1, s * 0.13)
+            wing_b.lineTo(-s * 0.15, s * 0.6)
+            wing_b.lineTo(-s * 0.42, s * 0.6)
+            wing_b.lineTo(-s * 0.42, s * 0.13)
+            wing_b.closeSubpath()
+
+            tail_t = QPainterPath()
+            tail_t.moveTo(-s * 0.5, -s * 0.13)
+            tail_t.lineTo(-s * 0.58, -s * 0.35)
+            tail_t.lineTo(-s * 0.75, -s * 0.35)
+            tail_t.lineTo(-s * 0.75, -s * 0.13)
+            tail_t.closeSubpath()
+
+            tail_b = QPainterPath()
+            tail_b.moveTo(-s * 0.5, s * 0.13)
+            tail_b.lineTo(-s * 0.58, s * 0.35)
+            tail_b.lineTo(-s * 0.75, s * 0.35)
+            tail_b.lineTo(-s * 0.75, s * 0.13)
+            tail_b.closeSubpath()
+
+            icon_path = body.united(wing_t).united(wing_b).united(tail_t).united(tail_b)
+        elif style == "火箭 (Rocket)":
+            body = QPainterPath()
+            body.moveTo(s, 0)
+            body.lineTo(s * 0.35, -s * 0.22)
+            body.lineTo(-s * 0.5, -s * 0.22)
+            body.lineTo(-s * 0.5, s * 0.22)
+            body.lineTo(s * 0.35, s * 0.22)
+            body.closeSubpath()
+
+            fin_t = QPainterPath()
+            fin_t.moveTo(-s * 0.38, -s * 0.22)
+            fin_t.lineTo(-s * 0.38, -s * 0.55)
+            fin_t.lineTo(-s * 0.85, -s * 0.65)
+            fin_t.lineTo(-s * 0.85, -s * 0.22)
+            fin_t.closeSubpath()
+
+            fin_b = QPainterPath()
+            fin_b.moveTo(-s * 0.38, s * 0.22)
+            fin_b.lineTo(-s * 0.38, s * 0.55)
+            fin_b.lineTo(-s * 0.85, s * 0.65)
+            fin_b.lineTo(-s * 0.85, s * 0.22)
+            fin_b.closeSubpath()
+
+            icon_path = body.united(fin_t).united(fin_b)
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(color)
+        painter.drawPath(icon_path)
+        painter.restore()
 
     def _paint_pulse(self, painter: QPainter) -> None:
         style = self.settings.pulse_style
