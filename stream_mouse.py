@@ -1868,8 +1868,41 @@ class OverlayWindow(QWidget):
 
         self._paint_paths(painter)
         if self.recording:
+            self._paint_recording_waypoints(painter)
             self._paint_mode_badge(painter, "REC")
         self._paint_pulse(painter)
+
+    def _paint_recording_waypoints(self, painter: QPainter) -> None:
+        if not self._recorded_waypoints or not self.recorded_points:
+            return
+        s = self.settings
+        dot_r = s.waypoint_dot_size
+        if dot_r <= 0:
+            return
+        alpha = int(s.waypoint_dot_alpha * 255 / 100)
+        dc = s.waypoint_dot_color
+        fill = QColor(dc.red(), dc.green(), dc.blue(), alpha)
+        bw = s.waypoint_border_width
+        bc = s.waypoint_border_color
+        lc = s.waypoint_label_color
+        font_size = max(7, dot_r - 2)
+        font = QFont()
+        font.setPixelSize(font_size)
+        font.setBold(True)
+        painter.setFont(font)
+        fm = painter.fontMetrics()
+        for n, wp_idx in enumerate(self._recorded_waypoints, start=1):
+            if wp_idx < len(self.recorded_points):
+                pt = self.recorded_points[wp_idx]
+                pen = QPen(bc, bw) if bw > 0 else QPen(Qt.PenStyle.NoPen)
+                painter.setPen(pen)
+                painter.setBrush(fill)
+                painter.drawEllipse(pt, dot_r, dot_r)
+                label = str(n)
+                tw = fm.horizontalAdvance(label)
+                th = fm.ascent()
+                painter.setPen(lc)
+                painter.drawText(pt.x() - tw // 2, pt.y() + th // 2, label)
 
     def _trail_limit(self, path_idx: int, elapsed: float) -> int:
         path = self.paths[path_idx]
