@@ -21,9 +21,8 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='StreamMouse',
     debug=False,
     bootloader_ignore_signals=False,
@@ -31,7 +30,7 @@ exe = EXE(
     upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,          # 不顯示黑色終端機視窗
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -39,4 +38,14 @@ exe = EXE(
     entitlements_file=None,
     uac_admin=False,
     icon='stream_deck_icons/stream_mouse.ico',
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='StreamMouse',
 )

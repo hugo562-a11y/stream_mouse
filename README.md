@@ -12,7 +12,9 @@ Windows 直播 / 錄影用透明覆蓋層，專為 OBS Studio 設計。
 
 > **不需要安裝 Python**，下載後直接執行。
 
-👉 **[前往 Releases 頁面下載最新版 StreamMouse.exe](https://github.com/hugo562-a11y/stream_mouse/releases/latest)**
+👉 **[前往 Releases 頁面下載最新版](https://github.com/hugo562-a11y/stream_mouse/releases/latest)**
+
+下載 **StreamMouse.zip**，解壓縮後執行裡面的 `StreamMouse\StreamMouse.exe`。
 
 同頁面也提供 **StreamMouse.streamDeckProfile** — 匯入後直接使用六個預設按鍵（見下方 Stream Deck 說明）。
 
