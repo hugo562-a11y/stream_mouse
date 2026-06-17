@@ -570,6 +570,7 @@ class AppSettings(QObject):
         self._waypoint_label_color = QColor(0, 0, 0)
         self._waypoint_border_width = 1
         self._waypoint_border_color = QColor(0, 0, 0)
+        self._suppress_emit = False
         self._hotkeys = {
             "escape": {"vk": 27, "ctrl": False, "shift": False, "alt": False},
             "recording": {"vk": 112, "ctrl": True, "shift": False, "alt": False},
@@ -582,6 +583,8 @@ class AppSettings(QObject):
         self.load()
 
     def _emit(self) -> None:
+        if self._suppress_emit:
+            return
         self.changed.emit()
         self.save()
 
@@ -1600,51 +1603,56 @@ class SettingsDialog(QDialog):
 
     def _reset_defaults(self) -> None:
         s = self.settings
-        s.obs_password = ""
-        s.stroke_width = 5
-        s.hud_width = 430
-        s.hud_height = 78
-        s.hud_bg_alpha = 82
-        s.hud_font_family = "Cascadia Mono"
-        s.hud_font_size = 21
-        s.hud_text_color = QColor(252, 254, 255)
-        s.hud_text_alpha = 250
-        s.text_disappear_secs = 0
-        s.magnify_style = "全螢幕 (Fullscreen)"
-        s.magnify_start_zoom = 1.0
-        s.lens_radius = 150
-        s.pulse_style = "雙圓圈 (Double)"
-        s.pulse_size = 20
-        s.pulse_speed = 1.0
-        s.pulse_color = QColor(30, 120, 255)
-        s.pulse_color2 = QColor(255, 255, 255)
-        s.trail_icon = "飛機 (Plane)"
-        s.trail_length = 200
-        s.trail_width = 3
-        s.trail_color = QColor(255, 80, 40)
-        s.trail_icon_size = 16
-        s.waypoint_pause = 0.5
-        s.waypoint_dot_size = 8
-        s.waypoint_dot_color = QColor(255, 220, 0)
-        s.waypoint_dot_alpha = 80
-        s.waypoint_label_color = QColor(0, 0, 0)
-        s.waypoint_border_width = 1
-        s.waypoint_border_color = QColor(0, 0, 0)
-        s.record_bg = True
-        s.record_bg_interval = 0.5
-        s.zoom_step = 0.25
-        s.zoom_idle_timeout = 0
-        s.crosshair_style = "十字線 (Crosshair)"
-        s.crosshair_size = 14
-        s.crosshair_color = QColor(255, 255, 255)
-        s.crosshair_alpha = 150
-        s.set_hotkey("escape", 27, False, False, False)
-        s.set_hotkey("recording", 112, True, False, False)
-        s.set_hotkey("waypoint", 113, True, False, False)
-        s.set_hotkey("magnify", 114, True, False, False)
-        s.set_hotkey("replay", 116, True, False, False)
-        s.set_hotkey("undo", 90, True, False, False)
-        s.set_hotkey("redo", 90, True, True, False)
+        s._suppress_emit = True
+        try:
+            s.obs_password = ""
+            s.hud_width = 430
+            s.hud_height = 78
+            s.hud_bg_alpha = 82
+            s.hud_font_family = "Cascadia Mono"
+            s.hud_font_size = 21
+            s.hud_text_color = QColor(252, 254, 255)
+            s.hud_text_alpha = 250
+            s.text_disappear_secs = 0
+            s.magnify_style = "全螢幕 (Fullscreen)"
+            s.magnify_start_zoom = 1.0
+            s.lens_radius = 150
+            s.pulse_style = "雙圓圈 (Double)"
+            s.pulse_size = 20
+            s.pulse_speed = 1.0
+            s.pulse_color = QColor(30, 120, 255)
+            s.pulse_color2 = QColor(255, 255, 255)
+            s.trail_icon = "飛機 (Plane)"
+            s.trail_length = 200
+            s.trail_width = 3
+            s.trail_color = QColor(255, 80, 40)
+            s.trail_icon_size = 16
+            s.waypoint_pause = 0.5
+            s.waypoint_dot_size = 8
+            s.waypoint_dot_color = QColor(255, 220, 0)
+            s.waypoint_dot_alpha = 80
+            s.waypoint_label_color = QColor(0, 0, 0)
+            s.waypoint_border_width = 1
+            s.waypoint_border_color = QColor(0, 0, 0)
+            s.record_bg = True
+            s.record_bg_interval = 0.5
+            s.zoom_step = 0.25
+            s.zoom_idle_timeout = 0
+            s.crosshair_style = "十字線 (Crosshair)"
+            s.crosshair_size = 14
+            s.crosshair_color = QColor(255, 255, 255)
+            s.crosshair_alpha = 150
+            s.set_hotkey("escape", 27, False, False, False)
+            s.set_hotkey("recording", 112, True, False, False)
+            s.set_hotkey("waypoint", 113, True, False, False)
+            s.set_hotkey("magnify", 114, True, False, False)
+            s.set_hotkey("replay", 116, True, False, False)
+            s.set_hotkey("undo", 90, True, False, False)
+            s.set_hotkey("redo", 90, True, True, False)
+        finally:
+            s._suppress_emit = False
+        s.save()
+        s.changed.emit()
         self._sync_ui()
 
     def _sync_ui(self) -> None:
@@ -1652,10 +1660,6 @@ class SettingsDialog(QDialog):
         self.obs_password_edit.blockSignals(True)
         self.obs_password_edit.setText(s.obs_password)
         self.obs_password_edit.blockSignals(False)
-
-        self.stroke_width_spin.blockSignals(True)
-        self.stroke_width_spin.setValue(s.stroke_width)
-        self.stroke_width_spin.blockSignals(False)
 
         self.hud_width_spin.blockSignals(True)
         self.hud_width_spin.setValue(s.hud_width)
