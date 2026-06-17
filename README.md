@@ -16,10 +16,17 @@ Windows 直播 / 錄影用透明覆蓋層，專為 OBS Studio 設計。
 
 同頁面也提供 **StreamMouse.streamDeckProfile** — 匯入後直接使用六個預設按鍵（見下方 Stream Deck 說明）。
 
-> **⚠️ Windows SmartScreen 警告**  
-> 首次執行時 Windows 可能顯示「已保護您的電腦」警告。  
-> 這是因為 EXE 尚未取得 Microsoft 數位簽章（付費憑證），原始碼完全公開可自行檢閱。  
-> 點「**更多資訊**」→「**仍要執行**」即可正常啟動。
+> **⚠️ 防毒軟體誤判說明**  
+> 部分防毒軟體（Windows Defender、Kaspersky 等）可能將此 EXE 標記為威脅並隔離。這是**誤判**，原因：  
+> - 使用 PyInstaller 打包，結構與某些惡意程式相似  
+> - 需要鍵盤/滑鼠 Hook 與螢幕截圖（正常功能，非惡意行為）  
+> - 尚未購買 Microsoft 數位簽章憑證（原始碼完全公開可自行驗證）  
+>
+> **解決方式：**  
+> - **被 Windows Defender 隔離**：「Windows 安全性」→「病毒與威脅防護」→「保護歷程記錄」→ 找到 StreamMouse → 「允許」  
+> - **SmartScreen 警告**：點「更多資訊」→「仍要執行」  
+> - **其他防毒軟體**：將 `StreamMouse.exe` 加入白名單／例外清單  
+> - **自行驗證**：上傳到 [VirusTotal](https://www.virustotal.com) 查看各家引擎結果，或從原始碼自行編譯
 
 ---
 
