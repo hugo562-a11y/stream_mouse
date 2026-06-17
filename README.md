@@ -3,23 +3,35 @@
 Windows 直播 / 錄影用透明覆蓋層，專為 OBS Studio 設計。  
 顯示鍵盤輸入、路徑動畫、放大鏡、遊標呼吸效果，全程不影響底層應用程式。
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)](https://github.com/hugo562-a11y/stream_mouse/releases)
+
 ---
 
-## 安裝
+## 下載（免安裝）
+
+> **不需要安裝 Python**，下載後直接執行。
+
+👉 **[前往 Releases 頁面下載最新版 StreamMouse.exe](https://github.com/hugo562-a11y/stream_mouse/releases/latest)**
+
+---
+
+## 從原始碼執行
 
 **需求：** Python 3.11+、Windows 10/11
 
 ```powershell
 pip install -r requirements.txt
-```
-
-## 執行
-
-```powershell
 python stream_mouse.py
 ```
 
-選擇要覆蓋的螢幕，按 **Start overlay** 啟動。
+### 自行編譯 EXE
+
+```powershell
+build.bat
+```
+
+輸出：`dist\StreamMouse.exe`
 
 ---
 
@@ -36,13 +48,14 @@ python stream_mouse.py
 |------|------|
 | 按錄製快速鍵（預設 `Ctrl+F1`） | 開始錄製滑鼠軌跡 |
 | 再按一次 | 停止錄製，軌跡自動開始播放動畫 |
-| **錄製中按右鍵** | 插入中斷點 |
+| 按中斷點快速鍵（預設 `Ctrl+F2`） | 錄製中插入中斷點 |
 | 按重播快速鍵（預設 `Ctrl+F5`） | 所有軌跡從頭重新播放 |
 
-播放效果：  
-- 彗星軌跡：尾端漸漸透明消失，頭部有方向圖示（飛機 / 箭頭 / 火箭）  
-- 遇到中斷點時暫停，停頓時間可在設定調整，再繼續下一段  
-- 中斷點位置顯示彩色圓點標記
+播放效果：
+- 彗星軌跡：尾端漸漸透明消失，頭部有方向圖示（飛機 / 箭頭 / 火箭），圖示尖端對齊遊標
+- 遇到中斷點時暫停，停頓時間可在設定調整，再繼續下一段
+- 中斷點位置顯示彩色編號圓點標記
+- 可選擇錄製時同步截取螢幕，播放時呈現當時的完整畫面背景
 
 ### 放大鏡
 
@@ -61,7 +74,8 @@ python stream_mouse.py
 
 ### 遊標呼吸效果
 滑鼠游標周圍可顯示動態光圈，樣式可選：
-雙圓圈 / 單圓圈 / 十字線 / 點+圓 / 無
+雙圓圈 / 單圓圈 / 十字線 / 點+圓 / 無  
+外框色與中心色可分別設定。
 
 ---
 
@@ -70,8 +84,9 @@ python stream_mouse.py
 | 快速鍵 | 功能 |
 |--------|------|
 | `Ctrl+F1` | 錄製切換（開始 / 停止） |
-| `Ctrl+F5` | 重播動畫 |
+| `Ctrl+F2` | 插入中斷點 |
 | `Ctrl+F3` | 放大鏡 / 截圖 |
+| `Ctrl+F5` | 重播動畫 |
 | `Esc` | 返回一般模式（清除軌跡） |
 | `Ctrl+Z` | 放大繪圖還原 |
 | `Ctrl+Shift+Z` | 放大繪圖復原 |
@@ -88,6 +103,7 @@ python stream_mouse.py
 - HUD 文字區域大小、背景透明度
 - 字型、字體大小、文字顏色/透明度
 - 文字自動消失秒數（0 = 永不）
+- OBS WebSocket 密碼
 
 ### 放大鏡
 - 放大鏡樣式（全螢幕 / 跟隨鏡頭）
@@ -96,7 +112,7 @@ python stream_mouse.py
 - 準心樣式、大小、顏色/透明度
 
 ### 遊標效果
-- 呼吸效果樣式、基礎半徑、速度、顏色
+- 呼吸效果樣式、基礎半徑、速度、外框色、中心色
 
 ### 路徑軌跡
 **軌跡外觀**
@@ -107,7 +123,11 @@ python stream_mouse.py
 
 **中斷點**
 - 停頓時間（0–5 秒）
-- 中斷點圓點大小（0 = 隱藏）、顏色
+- 中斷點圓點大小（0 = 隱藏）、顏色、背景透明度、數字顏色、外框
+
+**播放背景截圖**
+- 開關：錄製時同步截取螢幕畫面
+- 截圖間隔（0.2–5.0 秒）
 
 ### 快速鍵
 點按鈕後按下想要的組合鍵即可設定。
@@ -118,18 +138,24 @@ python stream_mouse.py
 
 OBS Studio 啟用 WebSocket（預設 `127.0.0.1:4455`）後，HUD 自動顯示串流狀態與場景名稱。
 
-若設有密碼：
+若設有密碼，可在 **設定 > 一般 > WebSocket 密碼** 填入，或透過環境變數：
 
 ```powershell
 $env:OBS_WEBSOCKET_PASSWORD = "your-password"
-python stream_mouse.py
 ```
 
 ---
 
 ## 注意事項
 
-- 僅支援 Windows
+- 僅支援 Windows 10 / 11
 - 覆蓋層只套用在啟動時選擇的螢幕
 - 鍵盤 HUD 會顯示最近輸入，請勿在輸入密碼時使用
 - 截圖儲存至桌面，檔名格式：`stream_mouse_YYYYMMDD_HHMMSS.png`
+- 啟用背景截圖功能後，長時間錄製會佔用較多記憶體
+
+---
+
+## License
+
+[MIT](LICENSE)

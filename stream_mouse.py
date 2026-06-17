@@ -25,6 +25,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QColorDialog,
     QComboBox,
     QDialog,
@@ -541,6 +542,8 @@ class AppSettings(QObject):
         self._hud_text_alpha = 250
         self._text_disappear_secs = 0
         self._obs_password = ""
+        self._record_bg = True
+        self._record_bg_interval = 0.5
         self._zoom_step = 0.25
         self._zoom_idle_timeout = 0
         self._crosshair_style = "十字線 (Crosshair)"
@@ -690,6 +693,26 @@ class AppSettings(QObject):
     def obs_password(self, v: str) -> None:
         if self._obs_password != v:
             self._obs_password = v
+            self._emit()
+
+    @property
+    def record_bg(self) -> bool:
+        return self._record_bg
+
+    @record_bg.setter
+    def record_bg(self, v: bool) -> None:
+        if self._record_bg != v:
+            self._record_bg = v
+            self._emit()
+
+    @property
+    def record_bg_interval(self) -> float:
+        return self._record_bg_interval
+
+    @record_bg_interval.setter
+    def record_bg_interval(self, v: float) -> None:
+        if self._record_bg_interval != v:
+            self._record_bg_interval = v
             self._emit()
 
     @property
@@ -982,6 +1005,8 @@ class AppSettings(QObject):
         s.setValue("hud_text_alpha", self._hud_text_alpha)
         s.setValue("text_disappear_secs", self._text_disappear_secs)
         s.setValue("obs_password", self._obs_password)
+        s.setValue("record_bg", self._record_bg)
+        s.setValue("record_bg_interval", self._record_bg_interval)
         s.setValue("zoom_step", self._zoom_step)
         s.setValue("zoom_idle_timeout", self._zoom_idle_timeout)
         s.setValue("crosshair_style", self._crosshair_style)
@@ -1029,6 +1054,8 @@ class AppSettings(QObject):
         self._hud_text_alpha = int(s.value("hud_text_alpha", self._hud_text_alpha))
         self._text_disappear_secs = int(s.value("text_disappear_secs", self._text_disappear_secs))
         self._obs_password = str(s.value("obs_password", self._obs_password))
+        self._record_bg = s.value("record_bg", self._record_bg, type=bool)
+        self._record_bg_interval = float(s.value("record_bg_interval", self._record_bg_interval))
         self._zoom_step = float(s.value("zoom_step", self._zoom_step))
         self._zoom_idle_timeout = int(s.value("zoom_idle_timeout", self._zoom_idle_timeout))
         self._crosshair_style = str(s.value("crosshair_style", self._crosshair_style))
@@ -1430,6 +1457,30 @@ class SettingsDialog(QDialog):
         wp_form.addRow("外框顏色:", self.waypoint_border_color_btn)
 
         tt_layout.addWidget(wp_group)
+
+        bg_group = QGroupBox("播放背景截圖")
+        bg_form = QFormLayout(bg_group)
+
+        self.record_bg_chk = QCheckBox("錄製時同步截取螢幕畫面")
+        self.record_bg_chk.setChecked(settings.record_bg)
+        self.record_bg_chk.toggled.connect(lambda v: setattr(settings, "record_bg", v))
+        bg_form.addRow(self.record_bg_chk)
+
+        self.record_bg_interval_spin = QDoubleSpinBox()
+        self.record_bg_interval_spin.setRange(0.2, 5.0)
+        self.record_bg_interval_spin.setSingleStep(0.1)
+        self.record_bg_interval_spin.setDecimals(1)
+        self.record_bg_interval_spin.setSuffix(" 秒")
+        self.record_bg_interval_spin.setValue(settings.record_bg_interval)
+        self.record_bg_interval_spin.valueChanged.connect(lambda v: setattr(settings, "record_bg_interval", v))
+        bg_form.addRow("截圖間隔:", self.record_bg_interval_spin)
+
+        bg_hint = QLabel("啟用後播放路徑動畫時，會以錄製當時的\n螢幕截圖作為背景，呈現完整示範情境。")
+        bg_hint.setWordWrap(True)
+        bg_hint.setStyleSheet("color: gray;")
+        bg_form.addRow(bg_hint)
+
+        tt_layout.addWidget(bg_group)
         tt_layout.addStretch()
         tabs.addTab(tab_trail, "路徑軌跡")
 
@@ -1579,6 +1630,8 @@ class SettingsDialog(QDialog):
         s.waypoint_label_color = QColor(0, 0, 0)
         s.waypoint_border_width = 1
         s.waypoint_border_color = QColor(0, 0, 0)
+        s.record_bg = True
+        s.record_bg_interval = 0.5
         s.zoom_step = 0.25
         s.zoom_idle_timeout = 0
         s.crosshair_style = "十字線 (Crosshair)"
@@ -1720,6 +1773,14 @@ class SettingsDialog(QDialog):
         self.waypoint_border_width_spin.setValue(s.waypoint_border_width)
         self.waypoint_border_width_spin.blockSignals(False)
 
+        self.record_bg_chk.blockSignals(True)
+        self.record_bg_chk.setChecked(s.record_bg)
+        self.record_bg_chk.blockSignals(False)
+
+        self.record_bg_interval_spin.blockSignals(True)
+        self.record_bg_interval_spin.setValue(s.record_bg_interval)
+        self.record_bg_interval_spin.blockSignals(False)
+
         self._update_color_button(self.text_color_btn, s.hud_text_color)
         self._update_color_button(self.crosshair_color_btn, s.crosshair_color)
         self._update_color_button(self.pulse_color_btn, s.pulse_color)
@@ -1756,6 +1817,9 @@ class OverlayWindow(QWidget):
         self._path_times: list[list[float]] = []
         self._path_anim_starts: list[float] = []
         self._path_waypoints: list[list[int]] = []
+        self._recorded_frames: list[tuple[float, QPixmap]] = []
+        self._path_frames: list[list[tuple[float, QPixmap]]] = []
+        self._last_frame_capture = 0.0
         self.draw_color = QColor(255, 70, 70)
         self.freeze_pixmap: QPixmap | None = None
         self.zoom = 3.0
@@ -1804,6 +1868,14 @@ class OverlayWindow(QWidget):
                 if not self.recorded_points or manhattan(self.recorded_points[-1], self.mouse_local) >= 3:
                     self.recorded_points.append(QPoint(self.mouse_local))
                     self._recorded_times.append(time.time())
+                if self.settings.record_bg and self._recorded_times:
+                    now = time.time()
+                    if now - self._last_frame_capture >= self.settings.record_bg_interval:
+                        px = self.screen.grabWindow(0)
+                        if not px.isNull():
+                            t0 = self._recorded_times[0]
+                            self._recorded_frames.append((now - t0, px))
+                        self._last_frame_capture = now
         if self.mode == Mode.MAGNIFY and self.settings.zoom_idle_timeout > 0:
             if time.time() - self._last_interaction_time > self.settings.zoom_idle_timeout:
                 self.return_to_normal()
@@ -1820,6 +1892,8 @@ class OverlayWindow(QWidget):
             self.recorded_points = []
             self._recorded_times = []
             self._recorded_waypoints = []
+            self._recorded_frames = []
+            self._last_frame_capture = 0.0
         else:
             self.recording = False
             if len(self.recorded_points) > 1:
@@ -1828,9 +1902,11 @@ class OverlayWindow(QWidget):
                 self._path_times.append([t - t0 for t in self._recorded_times])
                 self._path_anim_starts.append(time.time())
                 self._path_waypoints.append(list(self._recorded_waypoints))
+                self._path_frames.append(list(self._recorded_frames))
             self.recorded_points = []
             self._recorded_times = []
             self._recorded_waypoints = []
+            self._recorded_frames = []
         self.update()
 
     def insert_waypoint(self) -> None:
@@ -1874,6 +1950,8 @@ class OverlayWindow(QWidget):
         self._path_times.clear()
         self._path_anim_starts.clear()
         self._path_waypoints.clear()
+        self._path_frames.clear()
+        self._recorded_frames.clear()
         self._magnify_strokes.clear()
         self._magnify_active = None
         self._magnify_redo.clear()
@@ -1999,14 +2077,39 @@ class OverlayWindow(QWidget):
 
     def _paint_paths(self, painter: QPainter) -> None:
         now = time.time()
+        limits: list[int] = []
+        elapseds: list[float] = []
         for i, path in enumerate(self.paths):
             if i < len(self._path_times) and i < len(self._path_anim_starts):
                 elapsed = now - self._path_anim_starts[i]
                 limit = self._trail_limit(i, elapsed)
             else:
+                elapsed = float("inf")
                 limit = len(path)
+            limits.append(limit)
+            elapseds.append(elapsed)
+
+        # draw background screenshot for the most-progressed path with frames
+        best_i = -1
+        best_frac = -1.0
+        for i in range(len(self.paths)):
+            frames = self._path_frames[i] if i < len(self._path_frames) else []
+            if not frames:
+                continue
+            total_t = self._path_times[i][-1] if i < len(self._path_times) and self._path_times[i] else 1.0
+            frac = elapseds[i] / total_t if total_t > 0 else 0.0
+            if frac > best_frac:
+                best_frac = frac
+                best_i = i
+        if best_i >= 0:
+            frames = self._path_frames[best_i]
+            e = elapseds[best_i]
+            frame_idx = max(0, bisect.bisect_right([f[0] for f in frames], e) - 1)
+            painter.drawPixmap(self.rect(), frames[frame_idx][1])
+
+        for i, path in enumerate(self.paths):
             wps = self._path_waypoints[i] if i < len(self._path_waypoints) else []
-            self._paint_trail(painter, path, limit, wps)
+            self._paint_trail(painter, path, limits[i], wps)
 
     def _paint_trail(self, painter: QPainter, path: list[QPoint], limit: int, wps: list[int]) -> None:
         if limit < 2:
@@ -2097,6 +2200,12 @@ class OverlayWindow(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.translate(pos)
         painter.rotate(angle_deg)
+
+        # shift so the icon tip (front point) sits exactly on pos, not the center
+        if style == "箭頭 (Arrow)" or style == "火箭 (Rocket)":
+            painter.translate(-s, 0)
+        elif style == "飛機 (Plane)":
+            painter.translate(-s * 0.9, 0)
 
         icon_path = QPainterPath()
         if style == "箭頭 (Arrow)":
