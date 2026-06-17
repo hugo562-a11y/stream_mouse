@@ -38,5 +38,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     uac_admin=False,
-    icon='stream_deck_icons/streammouse_exe.ico',
+    icon='stream_deck_icons/stream_mouse.ico',
 )
