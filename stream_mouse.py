@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -278,8 +279,9 @@ def take_screenshot_from_screen(screen) -> str | None:
 class ObsStatusPoller(QWidget):
     status_changed = Signal(bool, str, bool)
 
-    def __init__(self) -> None:
+    def __init__(self, settings: "AppSettings") -> None:
         super().__init__()
+        self._settings = settings
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._request_id = 0
@@ -310,7 +312,7 @@ class ObsStatusPoller(QWidget):
             hello_data = hello.get("d", {})
             identify = {"rpcVersion": 1}
             auth = hello_data.get("authentication")
-            password = os.environ.get("OBS_WEBSOCKET_PASSWORD", "")
+            password = self._settings.obs_password or os.environ.get("OBS_WEBSOCKET_PASSWORD", "")
             if auth and password:
                 identify["authentication"] = obs_auth(password, auth["salt"], auth["challenge"])
             ws.send(json.dumps({"op": 1, "d": identify}))
@@ -538,6 +540,7 @@ class AppSettings(QObject):
         self._hud_text_color = QColor(252, 254, 255)
         self._hud_text_alpha = 250
         self._text_disappear_secs = 0
+        self._obs_password = ""
         self._zoom_step = 0.25
         self._zoom_idle_timeout = 0
         self._crosshair_style = "十字線 (Crosshair)"
@@ -677,6 +680,16 @@ class AppSettings(QObject):
     def text_disappear_secs(self, v: int) -> None:
         if self._text_disappear_secs != v:
             self._text_disappear_secs = v
+            self._emit()
+
+    @property
+    def obs_password(self) -> str:
+        return self._obs_password
+
+    @obs_password.setter
+    def obs_password(self, v: str) -> None:
+        if self._obs_password != v:
+            self._obs_password = v
             self._emit()
 
     @property
@@ -968,6 +981,7 @@ class AppSettings(QObject):
         s.setValue("hud_text_color", self._hud_text_color.rgba())
         s.setValue("hud_text_alpha", self._hud_text_alpha)
         s.setValue("text_disappear_secs", self._text_disappear_secs)
+        s.setValue("obs_password", self._obs_password)
         s.setValue("zoom_step", self._zoom_step)
         s.setValue("zoom_idle_timeout", self._zoom_idle_timeout)
         s.setValue("crosshair_style", self._crosshair_style)
@@ -1014,6 +1028,7 @@ class AppSettings(QObject):
             self._hud_text_color = QColor.fromRgba(int(rgba))
         self._hud_text_alpha = int(s.value("hud_text_alpha", self._hud_text_alpha))
         self._text_disappear_secs = int(s.value("text_disappear_secs", self._text_disappear_secs))
+        self._obs_password = str(s.value("obs_password", self._obs_password))
         self._zoom_step = float(s.value("zoom_step", self._zoom_step))
         self._zoom_idle_timeout = int(s.value("zoom_idle_timeout", self._zoom_idle_timeout))
         self._crosshair_style = str(s.value("crosshair_style", self._crosshair_style))
@@ -1180,6 +1195,22 @@ class SettingsDialog(QDialog):
         hud_form.addRow("文字自動消失:", self.text_disappear_spin)
 
         tg_layout.addWidget(hud_group)
+
+        obs_group = QGroupBox("OBS WebSocket")
+        obs_form = QFormLayout(obs_group)
+
+        obs_hint = QLabel("OBS → 工具 → WebSocket 伺服器設定\n若沒有設密碼，留空即可")
+        obs_hint.setStyleSheet("color: #aaa; font-size: 11px;")
+        obs_form.addRow(obs_hint)
+
+        self.obs_password_edit = QLineEdit()
+        self.obs_password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.obs_password_edit.setPlaceholderText("留空 = 無密碼")
+        self.obs_password_edit.setText(settings.obs_password)
+        self.obs_password_edit.textChanged.connect(lambda v: setattr(settings, "obs_password", v))
+        obs_form.addRow("WebSocket 密碼:", self.obs_password_edit)
+
+        tg_layout.addWidget(obs_group)
         tg_layout.addStretch()
         tabs.addTab(tab_general, "一般")
 
@@ -1518,6 +1549,7 @@ class SettingsDialog(QDialog):
 
     def _reset_defaults(self) -> None:
         s = self.settings
+        s.obs_password = ""
         s.stroke_width = 5
         s.hud_width = 430
         s.hud_height = 78
@@ -1564,6 +1596,10 @@ class SettingsDialog(QDialog):
 
     def _sync_ui(self) -> None:
         s = self.settings
+        self.obs_password_edit.blockSignals(True)
+        self.obs_password_edit.setText(s.obs_password)
+        self.obs_password_edit.blockSignals(False)
+
         self.stroke_width_spin.blockSignals(True)
         self.stroke_width_spin.setValue(s.stroke_width)
         self.stroke_width_spin.blockSignals(False)
@@ -2389,7 +2425,7 @@ class ControlWindow(QWidget):
         self.keyboard_hook = KeyboardHook()
         self.keyboard_hook.key_pressed.connect(self._on_key_pressed)
         self.keyboard_hook.start()
-        self.obs_poller = ObsStatusPoller()
+        self.obs_poller = ObsStatusPoller(self.settings)
         self.obs_poller.status_changed.connect(self._on_obs_status)
         self.screens = [
             ScreenInfo(i, screen.name(), screen.geometry())
