@@ -14,6 +14,11 @@ Windows 直播 / 錄影用透明覆蓋層，專為 OBS Studio 設計。
 
 👉 **[前往 Releases 頁面下載最新版 StreamMouse.exe](https://github.com/hugo562-a11y/stream_mouse/releases/latest)**
 
+> **⚠️ Windows SmartScreen 警告**  
+> 首次執行時 Windows 可能顯示「已保護您的電腦」警告。  
+> 這是因為 EXE 尚未取得 Microsoft 數位簽章（付費憑證），原始碼完全公開可自行檢閱。  
+> 點「**更多資訊**」→「**仍要執行**」即可正常啟動。
+
 ---
 
 ## 從原始碼執行
