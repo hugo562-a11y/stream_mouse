@@ -14,6 +14,8 @@ Windows 直播 / 錄影用透明覆蓋層，專為 OBS Studio 設計。
 
 👉 **[前往 Releases 頁面下載最新版 StreamMouse.exe](https://github.com/hugo562-a11y/stream_mouse/releases/latest)**
 
+同頁面也提供 **StreamMouse.streamDeckProfile** — 匯入後直接使用六個預設按鍵（見下方 Stream Deck 說明）。
+
 > **⚠️ Windows SmartScreen 警告**  
 > 首次執行時 Windows 可能顯示「已保護您的電腦」警告。  
 > 這是因為 EXE 尚未取得 Microsoft 數位簽章（付費憑證），原始碼完全公開可自行檢閱。  
@@ -136,6 +138,23 @@ build.bat
 
 ### 快速鍵
 點按鈕後按下想要的組合鍵即可設定。
+
+---
+
+## Stream Deck
+
+從 Releases 下載 **StreamMouse.streamDeckProfile**，雙擊即可匯入。
+
+| 按鍵位置 | 圖示 | 功能 | 快速鍵 |
+|----------|------|------|--------|
+| 第一排 1 | 🔴 錄製 | 開始 / 停止錄製 | `Ctrl+F1` |
+| 第一排 2 | 📍 中斷點 | 插入中斷點 | `Ctrl+F2` |
+| 第一排 3 | 🔍 放大鏡 | 放大鏡 / 截圖 | `Ctrl+F3` |
+| 第一排 4 | ▶️ 重播 | 重播動畫 | `Ctrl+F5` |
+| 第一排 5 | ↩️ 返回 | 返回一般模式 | `Esc` |
+| 第二排 1 | 🖱️ 啟動 | 啟動 StreamMouse.exe | *(需自行設定路徑)* |
+
+> **啟動按鍵**：匯入後在 Stream Deck 軟體中，對「啟動 StreamMouse」按鈕按右鍵 → 編輯 → 填入你的 `StreamMouse.exe` 完整路徑。
 
 ---
 
