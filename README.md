@@ -14,7 +14,10 @@ Windows 直播 / 錄影用透明覆蓋層，專為 OBS Studio 設計。
 
 👉 **[前往 Releases 頁面下載最新版](https://github.com/hugo562-a11y/stream_mouse/releases/latest)**
 
-下載 **StreamMouse.zip**，解壓縮後執行裡面的 `StreamMouse\StreamMouse.exe`。
+| 檔案 | 說明 |
+|------|------|
+| `StreamMouse.exe` | 單一檔案，下載即用（防毒軟體可能警告，見下方說明） |
+| `StreamMouse.zip` | 資料夾版，防毒誤判率較低，解壓縮後執行 `StreamMouse\StreamMouse.exe` |
 
 同頁面也提供 **StreamMouse.streamDeckProfile** — 匯入後直接使用六個預設按鍵（見下方 Stream Deck 說明）。
 
