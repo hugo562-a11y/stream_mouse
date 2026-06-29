@@ -449,159 +449,6 @@ class ObsStatusPoller(QWidget):
                 return data.get("responseData", {})
 
 
-class CaptionWorker(QObject):
-    caption_changed = Signal(str)
-    status_changed = Signal(str)
-
-    SAMPLE_RATE = 16000
-    CHUNK_SECONDS = 3.0
-
-    def __init__(self, settings: "AppSettings") -> None:
-        super().__init__()
-        self._settings = settings
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
-        self._segments: list[tuple[float, float, str]] = []
-        self._session_start = 0.0
-        self._last_segment_time = 0.0
-        self._zhconv = None
-
-    def start(self) -> None:
-        if self._thread and not self._thread.is_alive():
-            self._thread = None
-        if self._thread or not self._settings.captions_enabled:
-            return
-        self._stop.clear()
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
-
-    def stop(self) -> None:
-        self._stop.set()
-        thread = self._thread
-        if thread and thread is not threading.current_thread():
-            thread.join(timeout=1.0)
-            if not thread.is_alive():
-                self._thread = None
-
-    def restart(self) -> None:
-        self.stop()
-        self.start()
-
-    def _run(self) -> None:
-        cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache")
-        os.makedirs(cache_dir, exist_ok=True)
-        os.environ.setdefault("HF_HOME", cache_dir)
-        os.environ.setdefault("HF_HUB_CACHE", os.path.join(cache_dir, "hub"))
-        os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
-        try:
-            import numpy as np
-            import sounddevice as sd
-            from faster_whisper import WhisperModel
-        except Exception as exc:
-            self.status_changed.emit(f"即時字幕缺少套件：{exc}")
-            return
-
-        try:
-            self.status_changed.emit("正在載入字幕模型...")
-            model = WhisperModel(
-                self._settings.caption_model_size,
-                device="cpu",
-                compute_type="int8",
-            )
-            audio_queue: queue.Queue = queue.Queue()
-
-            def on_audio(indata, frames, time_info, status) -> None:
-                if status:
-                    return
-                audio_queue.put(indata.copy())
-
-            with sd.InputStream(
-                samplerate=self.SAMPLE_RATE,
-                channels=1,
-                dtype="float32",
-                callback=on_audio,
-            ):
-                self.status_changed.emit("即時字幕已啟用")
-                self._session_start = time.time()
-                self._last_segment_time = self._session_start
-                self._segments.clear()
-                pending: list = []
-                next_transcribe = time.time() + self.CHUNK_SECONDS
-                while not self._stop.is_set():
-                    try:
-                        pending.append(audio_queue.get(timeout=0.2))
-                    except queue.Empty:
-                        pass
-                    if time.time() < next_transcribe:
-                        continue
-                    next_transcribe = time.time() + self.CHUNK_SECONDS
-                    if not pending:
-                        continue
-                    audio = np.concatenate(pending, axis=0).reshape(-1)
-                    pending.clear()
-                    if float(np.max(np.abs(audio))) < 0.012:
-                        continue
-                    text = self._transcribe(model, audio)
-                    if text:
-                        now = time.time()
-                        self._segments.append((self._last_segment_time - self._session_start, now - self._session_start, text))
-                        self._last_segment_time = now
-                        self.status_changed.emit(f"字幕：{text}")
-                        self.caption_changed.emit(text)
-        except Exception as exc:
-            self.status_changed.emit(f"即時字幕停止：{exc}")
-        finally:
-            self._save_srt()
-            self._thread = None
-
-    def _transcribe(self, model, audio) -> str:
-        language = self._settings.caption_language
-        if language == "auto":
-            language = None
-        segments, _ = model.transcribe(
-            audio,
-            language=language,
-            beam_size=5,
-            vad_filter=True,
-            without_timestamps=True,
-        )
-        text = " ".join(segment.text.strip() for segment in segments).strip()
-        if text and self._settings.caption_language == "zh":
-            try:
-                if self._zhconv is None:
-                    import zhconv
-                    self._zhconv = zhconv.convert
-                text = self._zhconv(text, "zh-tw")
-            except Exception:
-                pass
-        return text
-
-    def _save_srt(self) -> None:
-        if not self._segments:
-            return
-        import datetime
-        folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "captions")
-        os.makedirs(folder, exist_ok=True)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = os.path.join(folder, f"StreamMouse_{timestamp}.srt")
-        lines = []
-        for i, (start, end, text) in enumerate(self._segments, start=1):
-            lines.append(str(i))
-            lines.append(f"{self._format_srt_time(start)} --> {self._format_srt_time(end)}")
-            lines.append(text)
-            lines.append("")
-        with open(path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines))
-
-    @staticmethod
-    def _format_srt_time(seconds: float) -> str:
-        h = int(seconds // 3600)
-        m = int((seconds % 3600) // 60)
-        s = int(seconds % 60)
-        ms = int((seconds - int(seconds)) * 1000)
-        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
-
-
 class KeyboardHud(QWidget):
     def __init__(self, screen_geometry: QRect, settings: AppSettings) -> None:
         super().__init__(
@@ -616,8 +463,6 @@ class KeyboardHud(QWidget):
         self._screen_geometry = screen_geometry
         self._tokens: deque[tuple[str, bool]] = deque(maxlen=48)
         self._token_times: deque[float] = deque(maxlen=48)
-        self._captions: deque[str] = deque(maxlen=3)
-        self._last_caption_time = 0.0
         self._drag_offset: QPoint | None = None
         self._hovered = False
         self._live = False
@@ -702,23 +547,6 @@ class KeyboardHud(QWidget):
         if changed:
             self.update()
 
-        caption_secs = self._settings.caption_disappear_secs
-        if caption_secs > 0 and self._last_caption_time and (now - self._last_caption_time) > caption_secs:
-            self._captions.clear()
-            self._last_caption_time = 0.0
-            self.update()
-
-    def set_caption(self, text: str) -> None:
-        text = " ".join(text.split())
-        if not text:
-            return
-        if not self._captions or self._captions[-1] != text:
-            self._captions.append(text)
-            while len(self._captions) > self._settings.caption_max_lines:
-                self._captions.popleft()
-        self._last_caption_time = time.time()
-        self.update()
-
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -729,7 +557,6 @@ class KeyboardHud(QWidget):
             painter.drawRoundedRect(rect, 10, 10)
 
         self._paint_tokens(painter)
-        self._paint_captions(painter)
         self._paint_obs_status(painter)
 
     def _paint_tokens(self, painter: QPainter) -> None:
@@ -768,32 +595,6 @@ class KeyboardHud(QWidget):
             else:
                 painter.setPen(text_color)
                 painter.drawText(x, y + self._settings.hud_font_size + 6, token)
-
-    def _paint_captions(self, painter: QPainter) -> None:
-        if not self._captions:
-            return
-        caption_color = QColor(self._settings.caption_text_color)
-        caption_color.setAlpha(self._settings.caption_text_alpha)
-        painter.setFont(QFont(self._settings.caption_font_family, self._settings.caption_font_size, QFont.Weight.DemiBold))
-        metrics = painter.fontMetrics()
-        line_height = metrics.height() + 2
-        max_lines = max(1, self._settings.caption_max_lines)
-        lines = list(self._captions)[-max_lines:]
-        y = 18 + self._settings.hud_font_size + 14
-        max_bottom = self.height() - 34
-        if y + line_height > max_bottom:
-            y = max(12, self.height() - 34 - line_height)
-        painter.setPen(caption_color)
-        for line in lines:
-            if y + line_height > max_bottom:
-                break
-            rect = QRect(12, y, self.width() - 24, line_height)
-            painter.drawText(
-                rect,
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                metrics.elidedText(line, Qt.TextElideMode.ElideRight, rect.width()),
-            )
-            y += line_height
 
     def _paint_obs_status(self, painter: QPainter) -> None:
         status = "LIVE" if self._live else "OFFLINE"
@@ -889,15 +690,6 @@ class AppSettings(QObject):
         self._text_disappear_secs = 0
         self._obs_password = ""
         self._obs_mic_input = ""
-        self._captions_enabled = False
-        self._caption_font_family = "Microsoft JhengHei"
-        self._caption_font_size = 24
-        self._caption_text_color = QColor(255, 255, 255)
-        self._caption_text_alpha = 255
-        self._caption_disappear_secs = 5
-        self._caption_max_lines = 2
-        self._caption_language = "zh"
-        self._caption_model_size = "base"
         self._record_bg = True
         self._record_bg_interval = 0.5
         self._zoom_step = 0.25
@@ -1063,101 +855,6 @@ class AppSettings(QObject):
     def obs_mic_input(self, v: str) -> None:
         if self._obs_mic_input != v:
             self._obs_mic_input = v
-            self._emit()
-
-    @property
-    def captions_enabled(self) -> bool:
-        return self._captions_enabled
-
-    @captions_enabled.setter
-    def captions_enabled(self, v: bool) -> None:
-        if self._captions_enabled != v:
-            self._captions_enabled = v
-            if v:
-                self._hud_height = max(self._hud_height, self.minimum_caption_hud_height())
-            self._emit()
-
-    def minimum_caption_hud_height(self) -> int:
-        return max(118, self._hud_font_size + self._caption_font_size * self._caption_max_lines + 58)
-
-    @property
-    def caption_font_family(self) -> str:
-        return self._caption_font_family
-
-    @caption_font_family.setter
-    def caption_font_family(self, v: str) -> None:
-        if self._caption_font_family != v:
-            self._caption_font_family = v
-            self._emit()
-
-    @property
-    def caption_font_size(self) -> int:
-        return self._caption_font_size
-
-    @caption_font_size.setter
-    def caption_font_size(self, v: int) -> None:
-        if self._caption_font_size != v:
-            self._caption_font_size = v
-            self._emit()
-
-    @property
-    def caption_text_color(self) -> QColor:
-        return self._caption_text_color
-
-    @caption_text_color.setter
-    def caption_text_color(self, v: QColor) -> None:
-        if self._caption_text_color != v:
-            self._caption_text_color = v
-            self._emit()
-
-    @property
-    def caption_text_alpha(self) -> int:
-        return self._caption_text_alpha
-
-    @caption_text_alpha.setter
-    def caption_text_alpha(self, v: int) -> None:
-        if self._caption_text_alpha != v:
-            self._caption_text_alpha = v
-            self._emit()
-
-    @property
-    def caption_disappear_secs(self) -> int:
-        return self._caption_disappear_secs
-
-    @caption_disappear_secs.setter
-    def caption_disappear_secs(self, v: int) -> None:
-        if self._caption_disappear_secs != v:
-            self._caption_disappear_secs = v
-            self._emit()
-
-    @property
-    def caption_max_lines(self) -> int:
-        return self._caption_max_lines
-
-    @caption_max_lines.setter
-    def caption_max_lines(self, v: int) -> None:
-        if self._caption_max_lines != v:
-            self._caption_max_lines = v
-            self._emit()
-
-    @property
-    def caption_language(self) -> str:
-        return self._caption_language
-
-    @caption_language.setter
-    def caption_language(self, v: str) -> None:
-        if self._caption_language != v:
-            self._caption_language = v
-            self._emit()
-
-    @property
-    def caption_model_size(self) -> str:
-        return self._caption_model_size
-
-    @caption_model_size.setter
-    def caption_model_size(self, v: str) -> None:
-        if self._caption_model_size != v:
-            self._caption_model_size = v
             self._emit()
 
     @property
@@ -1481,15 +1178,6 @@ class AppSettings(QObject):
         s.setValue("text_disappear_secs", self._text_disappear_secs)
         s.setValue("obs_password", self._obs_password)
         s.setValue("obs_mic_input", self._obs_mic_input)
-        s.setValue("captions_enabled", self._captions_enabled)
-        s.setValue("caption_font_family", self._caption_font_family)
-        s.setValue("caption_font_size", self._caption_font_size)
-        s.setValue("caption_text_color", self._caption_text_color.rgba())
-        s.setValue("caption_text_alpha", self._caption_text_alpha)
-        s.setValue("caption_disappear_secs", self._caption_disappear_secs)
-        s.setValue("caption_max_lines", self._caption_max_lines)
-        s.setValue("caption_language", self._caption_language)
-        s.setValue("caption_model_size", self._caption_model_size)
         s.setValue("record_bg", self._record_bg)
         s.setValue("record_bg_interval", self._record_bg_interval)
         s.setValue("zoom_step", self._zoom_step)
@@ -1541,19 +1229,6 @@ class AppSettings(QObject):
         self._text_disappear_secs = int(s.value("text_disappear_secs", self._text_disappear_secs))
         self._obs_password = str(s.value("obs_password", self._obs_password))
         self._obs_mic_input = str(s.value("obs_mic_input", self._obs_mic_input))
-        self._captions_enabled = s.value("captions_enabled", self._captions_enabled, type=bool)
-        self._caption_font_family = str(s.value("caption_font_family", self._caption_font_family))
-        self._caption_font_size = int(s.value("caption_font_size", self._caption_font_size))
-        rgba_caption = s.value("caption_text_color")
-        if rgba_caption is not None:
-            self._caption_text_color = QColor.fromRgba(int(rgba_caption))
-        self._caption_text_alpha = int(s.value("caption_text_alpha", self._caption_text_alpha))
-        self._caption_disappear_secs = int(s.value("caption_disappear_secs", self._caption_disappear_secs))
-        self._caption_max_lines = int(s.value("caption_max_lines", self._caption_max_lines))
-        self._caption_language = str(s.value("caption_language", self._caption_language))
-        self._caption_model_size = str(s.value("caption_model_size", self._caption_model_size))
-        if self._captions_enabled:
-            self._hud_height = max(self._hud_height, self.minimum_caption_hud_height())
         self._record_bg = s.value("record_bg", self._record_bg, type=bool)
         self._record_bg_interval = float(s.value("record_bg_interval", self._record_bg_interval))
         self._zoom_step = float(s.value("zoom_step", self._zoom_step))
@@ -1723,86 +1398,6 @@ class SettingsDialog(QDialog):
         hud_form.addRow("文字自動消失:", self.text_disappear_spin)
 
         tg_layout.addWidget(hud_group)
-
-        caption_group = QGroupBox("即時字幕")
-        caption_form = QFormLayout(caption_group)
-
-        self.captions_enabled_chk = QCheckBox("啟用即時字幕")
-        self.captions_enabled_chk.setChecked(settings.captions_enabled)
-        self.captions_enabled_chk.toggled.connect(lambda v: setattr(settings, "captions_enabled", v))
-        caption_form.addRow(self.captions_enabled_chk)
-
-        caption_hint = QLabel("第一次啟用會載入 Whisper 模型；字幕使用系統預設麥克風。")
-        caption_hint.setWordWrap(True)
-        caption_hint.setStyleSheet("color: #aaa; font-size: 11px;")
-        caption_form.addRow(caption_hint)
-
-        self.caption_font_combo = QComboBox()
-        self.caption_font_combo.setEditable(True)
-        self.caption_font_combo.addItems(
-            ["Microsoft JhengHei", "Segoe UI", "Arial", "Cascadia Mono", "Consolas"]
-        )
-        idx_cap_font = self.caption_font_combo.findText(settings.caption_font_family)
-        if idx_cap_font >= 0:
-            self.caption_font_combo.setCurrentIndex(idx_cap_font)
-        else:
-            self.caption_font_combo.setCurrentText(settings.caption_font_family)
-        self.caption_font_combo.currentTextChanged.connect(lambda v: setattr(settings, "caption_font_family", v))
-        caption_form.addRow("字幕字型:", self.caption_font_combo)
-
-        self.caption_font_size_spin = QSpinBox()
-        self.caption_font_size_spin.setRange(8, 120)
-        self.caption_font_size_spin.setValue(settings.caption_font_size)
-        self.caption_font_size_spin.valueChanged.connect(lambda v: setattr(settings, "caption_font_size", v))
-        caption_form.addRow("字幕大小:", self.caption_font_size_spin)
-
-        caption_color_row = QHBoxLayout()
-        self.caption_color_btn = QPushButton()
-        self._update_color_button(self.caption_color_btn, settings.caption_text_color)
-        self.caption_color_btn.clicked.connect(self._pick_caption_color)
-        caption_color_row.addWidget(self.caption_color_btn)
-        self.caption_alpha_slider = QSlider(Qt.Orientation.Horizontal)
-        self.caption_alpha_slider.setRange(0, 100)
-        self.caption_alpha_slider.setValue(settings.caption_text_alpha * 100 // 255)
-        self.caption_alpha_slider.valueChanged.connect(lambda v: setattr(settings, "caption_text_alpha", v * 255 // 100))
-        caption_color_row.addWidget(self.caption_alpha_slider)
-        caption_form.addRow("字幕顏色/透明度:", caption_color_row)
-
-        self.caption_disappear_spin = QSpinBox()
-        self.caption_disappear_spin.setRange(0, 999)
-        self.caption_disappear_spin.setSuffix(" 秒")
-        self.caption_disappear_spin.setSpecialValueText("永不")
-        self.caption_disappear_spin.setValue(settings.caption_disappear_secs)
-        self.caption_disappear_spin.valueChanged.connect(lambda v: setattr(settings, "caption_disappear_secs", v))
-        caption_form.addRow("字幕自動消失:", self.caption_disappear_spin)
-
-        self.caption_max_lines_spin = QSpinBox()
-        self.caption_max_lines_spin.setRange(1, 3)
-        self.caption_max_lines_spin.setValue(settings.caption_max_lines)
-        self.caption_max_lines_spin.valueChanged.connect(lambda v: setattr(settings, "caption_max_lines", v))
-        caption_form.addRow("最多行數:", self.caption_max_lines_spin)
-
-        self.caption_language_combo = QComboBox()
-        self.caption_language_combo.addItem("中文", "zh")
-        self.caption_language_combo.addItem("英文", "en")
-        self.caption_language_combo.addItem("自動", "auto")
-        idx_lang = self.caption_language_combo.findData(settings.caption_language)
-        if idx_lang >= 0:
-            self.caption_language_combo.setCurrentIndex(idx_lang)
-        self.caption_language_combo.currentIndexChanged.connect(
-            lambda _: setattr(settings, "caption_language", self.caption_language_combo.currentData())
-        )
-        caption_form.addRow("語言:", self.caption_language_combo)
-
-        self.caption_model_combo = QComboBox()
-        self.caption_model_combo.addItems(["tiny", "base", "small", "medium", "large-v3"])
-        idx_model = self.caption_model_combo.findText(settings.caption_model_size)
-        if idx_model >= 0:
-            self.caption_model_combo.setCurrentIndex(idx_model)
-        self.caption_model_combo.currentTextChanged.connect(lambda v: setattr(settings, "caption_model_size", v))
-        caption_form.addRow("模型大小:", self.caption_model_combo)
-
-        tg_layout.addWidget(caption_group)
 
         obs_group = QGroupBox("OBS WebSocket")
         obs_form = QFormLayout(obs_group)
@@ -2134,12 +1729,6 @@ class SettingsDialog(QDialog):
             self.settings.hud_text_color = color
             self._update_color_button(self.text_color_btn, color)
 
-    def _pick_caption_color(self) -> None:
-        color = QColorDialog.getColor(self.settings.caption_text_color, self, "選擇字幕顏色")
-        if color.isValid():
-            self.settings.caption_text_color = color
-            self._update_color_button(self.caption_color_btn, color)
-
     def _pick_crosshair_color(self) -> None:
         color = QColorDialog.getColor(self.settings.crosshair_color, self, "選擇準心顏色")
         if color.isValid():
@@ -2213,15 +1802,6 @@ class SettingsDialog(QDialog):
             s.hud_text_color = QColor(252, 254, 255)
             s.hud_text_alpha = 250
             s.text_disappear_secs = 0
-            s.captions_enabled = False
-            s.caption_font_family = "Microsoft JhengHei"
-            s.caption_font_size = 24
-            s.caption_text_color = QColor(255, 255, 255)
-            s.caption_text_alpha = 255
-            s.caption_disappear_secs = 5
-            s.caption_max_lines = 2
-            s.caption_language = "zh"
-            s.caption_model_size = "base"
             s.magnify_style = "全螢幕 (Fullscreen)"
             s.magnify_start_zoom = 1.0
             s.lens_radius = 150
@@ -2305,47 +1885,6 @@ class SettingsDialog(QDialog):
         self.text_disappear_spin.blockSignals(True)
         self.text_disappear_spin.setValue(s.text_disappear_secs)
         self.text_disappear_spin.blockSignals(False)
-
-        self.captions_enabled_chk.blockSignals(True)
-        self.captions_enabled_chk.setChecked(s.captions_enabled)
-        self.captions_enabled_chk.blockSignals(False)
-
-        self.caption_font_combo.blockSignals(True)
-        idx_cap_font = self.caption_font_combo.findText(s.caption_font_family)
-        if idx_cap_font >= 0:
-            self.caption_font_combo.setCurrentIndex(idx_cap_font)
-        else:
-            self.caption_font_combo.setCurrentText(s.caption_font_family)
-        self.caption_font_combo.blockSignals(False)
-
-        self.caption_font_size_spin.blockSignals(True)
-        self.caption_font_size_spin.setValue(s.caption_font_size)
-        self.caption_font_size_spin.blockSignals(False)
-
-        self.caption_alpha_slider.blockSignals(True)
-        self.caption_alpha_slider.setValue(s.caption_text_alpha * 100 // 255)
-        self.caption_alpha_slider.blockSignals(False)
-        self._update_color_button(self.caption_color_btn, s.caption_text_color)
-
-        self.caption_disappear_spin.blockSignals(True)
-        self.caption_disappear_spin.setValue(s.caption_disappear_secs)
-        self.caption_disappear_spin.blockSignals(False)
-
-        self.caption_max_lines_spin.blockSignals(True)
-        self.caption_max_lines_spin.setValue(s.caption_max_lines)
-        self.caption_max_lines_spin.blockSignals(False)
-
-        self.caption_language_combo.blockSignals(True)
-        idx_lang = self.caption_language_combo.findData(s.caption_language)
-        if idx_lang >= 0:
-            self.caption_language_combo.setCurrentIndex(idx_lang)
-        self.caption_language_combo.blockSignals(False)
-
-        self.caption_model_combo.blockSignals(True)
-        idx_model = self.caption_model_combo.findText(s.caption_model_size)
-        if idx_model >= 0:
-            self.caption_model_combo.setCurrentIndex(idx_model)
-        self.caption_model_combo.blockSignals(False)
 
         self.magnify_style_combo.blockSignals(True)
         idx_ms = self.magnify_style_combo.findText(s.magnify_style)
@@ -3229,11 +2768,6 @@ class ControlWindow(QWidget):
         self.keyboard_hook.start()
         self.obs_poller = ObsStatusPoller(self.settings)
         self.obs_poller.status_changed.connect(self._on_obs_status)
-        self.caption_worker = CaptionWorker(self.settings)
-        self.caption_worker.caption_changed.connect(self._on_caption_changed)
-        self.caption_worker.status_changed.connect(self._on_caption_status)
-        self.settings.changed.connect(self._on_settings_changed)
-        self._caption_signature = self._current_caption_signature()
         self.screens = [
             ScreenInfo(i, screen.name(), screen.geometry())
             for i, screen in enumerate(QApplication.screens())
@@ -3280,7 +2814,6 @@ class ControlWindow(QWidget):
         self.overlay.show()
         self.hud.show()
         self.obs_poller.start()
-        self.caption_worker.start()
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
         self.combo.setEnabled(False)
@@ -3288,7 +2821,6 @@ class ControlWindow(QWidget):
 
     def stop_overlay(self) -> None:
         self.obs_poller.stop()
-        self.caption_worker.stop()
         if self.overlay:
             self.overlay.close()
             self.overlay = None
@@ -3361,32 +2893,9 @@ class ControlWindow(QWidget):
         if self.hud:
             self.hud.set_obs_status(live, scene, connected, mic_level)
 
-    def _on_caption_changed(self, text: str) -> None:
-        if self.hud:
-            self.hud.set_caption(text)
-
-    def _on_caption_status(self, text: str) -> None:
-        self.status.setText(text)
-
-    def _on_settings_changed(self) -> None:
-        signature = self._current_caption_signature()
-        if not self.hud or not self.settings.captions_enabled:
-            self.caption_worker.stop()
-        elif signature != self._caption_signature:
-            self.caption_worker.restart()
-        self._caption_signature = signature
-
-    def _current_caption_signature(self) -> tuple[bool, str, str]:
-        return (
-            self.settings.captions_enabled,
-            self.settings.caption_language,
-            self.settings.caption_model_size,
-        )
-
     def closeEvent(self, event) -> None:  # noqa: N802
         self.keyboard_hook.stop()
         self.obs_poller.stop()
-        self.caption_worker.stop()
         if self.overlay:
             self.overlay.close()
             self.overlay = None

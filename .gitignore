@@ -10,5 +10,3 @@ build/
 venv/
 screenshots/
 .cache/
-captions/
-test_conv.txt
