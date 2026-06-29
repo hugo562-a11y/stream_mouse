@@ -701,6 +701,9 @@ class AppSettings(QObject):
         self._magnify_style = "全螢幕 (Fullscreen)"
         self._magnify_start_zoom = 1.0
         self._lens_radius = 150
+        self._draw_mod_line = "Shift"
+        self._draw_mod_circle = "Alt"
+        self._draw_mod_rect = "Ctrl"
         self._pulse_style = "雙圓圈 (Double)"
         self._pulse_size = 20
         self._pulse_speed = 1.0
@@ -968,6 +971,36 @@ class AppSettings(QObject):
             self._emit()
 
     @property
+    def draw_mod_line(self) -> str:
+        return self._draw_mod_line
+
+    @draw_mod_line.setter
+    def draw_mod_line(self, v: str) -> None:
+        if self._draw_mod_line != v:
+            self._draw_mod_line = v
+            self._emit()
+
+    @property
+    def draw_mod_circle(self) -> str:
+        return self._draw_mod_circle
+
+    @draw_mod_circle.setter
+    def draw_mod_circle(self, v: str) -> None:
+        if self._draw_mod_circle != v:
+            self._draw_mod_circle = v
+            self._emit()
+
+    @property
+    def draw_mod_rect(self) -> str:
+        return self._draw_mod_rect
+
+    @draw_mod_rect.setter
+    def draw_mod_rect(self, v: str) -> None:
+        if self._draw_mod_rect != v:
+            self._draw_mod_rect = v
+            self._emit()
+
+    @property
     def pulse_style(self) -> str:
         return self._pulse_style
 
@@ -1189,6 +1222,9 @@ class AppSettings(QObject):
         s.setValue("magnify_style", self._magnify_style)
         s.setValue("magnify_start_zoom", self._magnify_start_zoom)
         s.setValue("lens_radius", self._lens_radius)
+        s.setValue("draw_mod_line", self._draw_mod_line)
+        s.setValue("draw_mod_circle", self._draw_mod_circle)
+        s.setValue("draw_mod_rect", self._draw_mod_rect)
         s.setValue("pulse_style", self._pulse_style)
         s.setValue("pulse_size", self._pulse_size)
         s.setValue("pulse_speed", self._pulse_speed)
@@ -1242,6 +1278,9 @@ class AppSettings(QObject):
         self._magnify_style = str(s.value("magnify_style", self._magnify_style))
         self._magnify_start_zoom = float(s.value("magnify_start_zoom", self._magnify_start_zoom))
         self._lens_radius = int(s.value("lens_radius", self._lens_radius))
+        self._draw_mod_line = str(s.value("draw_mod_line", self._draw_mod_line))
+        self._draw_mod_circle = str(s.value("draw_mod_circle", self._draw_mod_circle))
+        self._draw_mod_rect = str(s.value("draw_mod_rect", self._draw_mod_rect))
         self._pulse_style = str(s.value("pulse_style", self._pulse_style))
         self._pulse_size = int(s.value("pulse_size", self._pulse_size))
         self._pulse_speed = float(s.value("pulse_speed", self._pulse_speed))
@@ -1466,6 +1505,29 @@ class SettingsDialog(QDialog):
         self.zoom_idle_spin.setValue(settings.zoom_idle_timeout)
         self.zoom_idle_spin.valueChanged.connect(lambda v: setattr(settings, "zoom_idle_timeout", v))
         mag_form.addRow("閒置自動退出:", self.zoom_idle_spin)
+
+        sep = QLabel("繪製快捷鍵")
+        sep.setStyleSheet("color: #aaa; font-size: 11px; padding-top: 6px")
+        mag_form.addRow(sep)
+
+        MOD_KEYS = ["Shift", "Ctrl", "Alt"]
+        self.draw_mod_line_combo = QComboBox()
+        self.draw_mod_line_combo.addItems(MOD_KEYS)
+        self.draw_mod_line_combo.setCurrentText(settings.draw_mod_line)
+        self.draw_mod_line_combo.currentTextChanged.connect(lambda v: setattr(settings, "draw_mod_line", v))
+        mag_form.addRow("直線:", self.draw_mod_line_combo)
+
+        self.draw_mod_circle_combo = QComboBox()
+        self.draw_mod_circle_combo.addItems(MOD_KEYS)
+        self.draw_mod_circle_combo.setCurrentText(settings.draw_mod_circle)
+        self.draw_mod_circle_combo.currentTextChanged.connect(lambda v: setattr(settings, "draw_mod_circle", v))
+        mag_form.addRow("圓形:", self.draw_mod_circle_combo)
+
+        self.draw_mod_rect_combo = QComboBox()
+        self.draw_mod_rect_combo.addItems(MOD_KEYS)
+        self.draw_mod_rect_combo.setCurrentText(settings.draw_mod_rect)
+        self.draw_mod_rect_combo.currentTextChanged.connect(lambda v: setattr(settings, "draw_mod_rect", v))
+        mag_form.addRow("矩形:", self.draw_mod_rect_combo)
 
         tm_layout.addWidget(mag_group)
 
@@ -1805,6 +1867,9 @@ class SettingsDialog(QDialog):
             s.magnify_style = "全螢幕 (Fullscreen)"
             s.magnify_start_zoom = 1.0
             s.lens_radius = 150
+            s.draw_mod_line = "Shift"
+            s.draw_mod_circle = "Alt"
+            s.draw_mod_rect = "Ctrl"
             s.pulse_style = "雙圓圈 (Double)"
             s.pulse_size = 20
             s.pulse_speed = 1.0
@@ -1907,6 +1972,18 @@ class SettingsDialog(QDialog):
         self.zoom_idle_spin.blockSignals(True)
         self.zoom_idle_spin.setValue(s.zoom_idle_timeout)
         self.zoom_idle_spin.blockSignals(False)
+
+        self.draw_mod_line_combo.blockSignals(True)
+        self.draw_mod_line_combo.setCurrentText(s.draw_mod_line)
+        self.draw_mod_line_combo.blockSignals(False)
+
+        self.draw_mod_circle_combo.blockSignals(True)
+        self.draw_mod_circle_combo.setCurrentText(s.draw_mod_circle)
+        self.draw_mod_circle_combo.blockSignals(False)
+
+        self.draw_mod_rect_combo.blockSignals(True)
+        self.draw_mod_rect_combo.setCurrentText(s.draw_mod_rect)
+        self.draw_mod_rect_combo.blockSignals(False)
 
         self.crosshair_style_combo.blockSignals(True)
         idx2 = self.crosshair_style_combo.findText(s.crosshair_style)
@@ -2622,16 +2699,19 @@ class OverlayWindow(QWidget):
                 painter.setPen(QPen(color, self.settings.stroke_width, Qt.PenStyle.SolidLine))
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawRect(QRect(dp1, dp2))
-            elif kind == "circle":
+            elif kind in ("circle", "line"):
                 _, _, p1, p2 = item
                 dp1 = self._screen_to_display(p1, src_x, src_y, src_w, src_h)
                 dp2 = self._screen_to_display(p2, src_x, src_y, src_w, src_h)
-                dx = dp2.x() - dp1.x()
-                dy = dp2.y() - dp1.y()
-                r = int(math.sqrt(dx * dx + dy * dy))
                 painter.setPen(QPen(color, self.settings.stroke_width, Qt.PenStyle.SolidLine))
                 painter.setBrush(Qt.BrushStyle.NoBrush)
-                painter.drawEllipse(dp1, r, r)
+                if kind == "circle":
+                    dx = dp2.x() - dp1.x()
+                    dy = dp2.y() - dp1.y()
+                    r = int(math.sqrt(dx * dx + dy * dy))
+                    painter.drawEllipse(dp1, r, r)
+                else:
+                    painter.drawLine(dp1, dp2)
             else:
                 _, _, points = item
                 self._paint_stroke(painter, color, td(points))
@@ -2646,6 +2726,8 @@ class OverlayWindow(QWidget):
                 dy = dp2.y() - dp1.y()
                 r = int(math.sqrt(dx * dx + dy * dy))
                 painter.drawEllipse(dp1, r, r)
+            elif self._magnify_draw_type == "line":
+                painter.drawLine(dp1, dp2)
             else:
                 painter.drawRect(QRect(dp1, dp2))
         elif self._magnify_active:
@@ -2760,18 +2842,31 @@ class OverlayWindow(QWidget):
         }
         return colors.get(self.draw_color.rgb(), "COLOR")
 
+    def _mod_matches(self, mods, name: str) -> bool:
+        if name == "Ctrl":
+            return bool(mods & Qt.KeyboardModifier.ControlModifier)
+        elif name == "Shift":
+            return bool(mods & Qt.KeyboardModifier.ShiftModifier)
+        elif name == "Alt":
+            return bool(mods & Qt.KeyboardModifier.AltModifier)
+        return False
+
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
             if self.mode == Mode.MAGNIFY:
                 mods = event.modifiers()
-                if mods & Qt.KeyboardModifier.ShiftModifier:
+                if self._mod_matches(mods, self.settings.draw_mod_line):
+                    self._magnify_draw_type = "line"
                     self._magnify_rect_origin = QPoint(self.mouse_local)
                     self._magnify_rect_current = QPoint(self.mouse_local)
+                elif self._mod_matches(mods, self.settings.draw_mod_circle):
                     self._magnify_draw_type = "circle"
-                elif mods & Qt.KeyboardModifier.ControlModifier:
                     self._magnify_rect_origin = QPoint(self.mouse_local)
                     self._magnify_rect_current = QPoint(self.mouse_local)
+                elif self._mod_matches(mods, self.settings.draw_mod_rect):
                     self._magnify_draw_type = "rect"
+                    self._magnify_rect_origin = QPoint(self.mouse_local)
+                    self._magnify_rect_current = QPoint(self.mouse_local)
                 else:
                     self._magnify_active = [QPoint(self.mouse_local)]
                 self._magnify_redo.clear()
