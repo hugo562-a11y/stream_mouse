@@ -722,6 +722,9 @@ class AppSettings(QObject):
         self._waypoint_label_color = QColor(0, 0, 0)
         self._waypoint_border_width = 1
         self._waypoint_border_color = QColor(0, 0, 0)
+        self._waypoint_line_style = "虛線 (Dashed)"
+        self._waypoint_line_color = QColor(255, 220, 0)
+        self._waypoint_line_width = 2
         self._suppress_emit = False
         self._hotkeys = {
             "escape": {"vk": 27, "ctrl": False, "shift": False, "alt": False},
@@ -1180,6 +1183,36 @@ class AppSettings(QObject):
             self._waypoint_border_color = v
             self._emit()
 
+    @property
+    def waypoint_line_style(self) -> str:
+        return self._waypoint_line_style
+
+    @waypoint_line_style.setter
+    def waypoint_line_style(self, v: str) -> None:
+        if self._waypoint_line_style != v:
+            self._waypoint_line_style = v
+            self._emit()
+
+    @property
+    def waypoint_line_color(self) -> QColor:
+        return self._waypoint_line_color
+
+    @waypoint_line_color.setter
+    def waypoint_line_color(self, v: QColor) -> None:
+        if self._waypoint_line_color != v:
+            self._waypoint_line_color = v
+            self._emit()
+
+    @property
+    def waypoint_line_width(self) -> int:
+        return self._waypoint_line_width
+
+    @waypoint_line_width.setter
+    def waypoint_line_width(self, v: int) -> None:
+        if self._waypoint_line_width != v:
+            self._waypoint_line_width = v
+            self._emit()
+
     def get_hotkey_text(self, action: str) -> str:
         hk = self._hotkeys.get(action)
         if hk is None:
@@ -1243,6 +1276,9 @@ class AppSettings(QObject):
         s.setValue("waypoint_label_color", self._waypoint_label_color.rgba())
         s.setValue("waypoint_border_width", self._waypoint_border_width)
         s.setValue("waypoint_border_color", self._waypoint_border_color.rgba())
+        s.setValue("waypoint_line_style", self._waypoint_line_style)
+        s.setValue("waypoint_line_color", self._waypoint_line_color.rgba())
+        s.setValue("waypoint_line_width", self._waypoint_line_width)
         for action, hk in self._hotkeys.items():
             s.setValue(f"hotkey_{action}_vk", hk["vk"])
             s.setValue(f"hotkey_{action}_ctrl", hk["ctrl"])
@@ -1311,6 +1347,11 @@ class AppSettings(QObject):
         rgba_wb = s.value("waypoint_border_color")
         if rgba_wb is not None:
             self._waypoint_border_color = QColor.fromRgba(int(rgba_wb))
+        self._waypoint_line_style = str(s.value("waypoint_line_style", self._waypoint_line_style))
+        rgba_wl2 = s.value("waypoint_line_color")
+        if rgba_wl2 is not None:
+            self._waypoint_line_color = QColor.fromRgba(int(rgba_wl2))
+        self._waypoint_line_width = int(s.value("waypoint_line_width", self._waypoint_line_width))
         for action in self._hotkeys:
             vk = s.value(f"hotkey_{action}_vk")
             if vk is not None:
@@ -1708,6 +1749,24 @@ class SettingsDialog(QDialog):
         self.waypoint_border_color_btn.clicked.connect(self._pick_waypoint_border_color)
         wp_form.addRow("外框顏色:", self.waypoint_border_color_btn)
 
+        self.waypoint_line_style_combo = QComboBox()
+        self.waypoint_line_style_combo.addItems(["無 (None)", "虛線 (Dashed)"])
+        self.waypoint_line_style_combo.setCurrentText(settings.waypoint_line_style)
+        self.waypoint_line_style_combo.currentTextChanged.connect(lambda v: setattr(settings, "waypoint_line_style", v))
+        wp_form.addRow("中斷點連線:", self.waypoint_line_style_combo)
+
+        self.waypoint_line_color_btn = QPushButton()
+        self._update_color_button(self.waypoint_line_color_btn, settings.waypoint_line_color)
+        self.waypoint_line_color_btn.clicked.connect(self._pick_waypoint_line_color)
+        wp_form.addRow("連線顏色:", self.waypoint_line_color_btn)
+
+        self.waypoint_line_width_spin = QSpinBox()
+        self.waypoint_line_width_spin.setRange(1, 10)
+        self.waypoint_line_width_spin.setSuffix(" px")
+        self.waypoint_line_width_spin.setValue(settings.waypoint_line_width)
+        self.waypoint_line_width_spin.valueChanged.connect(lambda v: setattr(settings, "waypoint_line_width", v))
+        wp_form.addRow("連線粗細:", self.waypoint_line_width_spin)
+
         tt_layout.addWidget(wp_group)
 
         bg_group = QGroupBox("播放背景截圖")
@@ -1833,6 +1892,12 @@ class SettingsDialog(QDialog):
             self.settings.waypoint_border_color = color
             self._update_color_button(self.waypoint_border_color_btn, color)
 
+    def _pick_waypoint_line_color(self) -> None:
+        color = QColorDialog.getColor(self.settings.waypoint_line_color, self, "選擇連線顏色")
+        if color.isValid():
+            self.settings.waypoint_line_color = color
+            self._update_color_button(self.waypoint_line_color_btn, color)
+
     def _start_listening(self, action: str, button: QPushButton) -> None:
         self._listening_action = action
         self._listening_button = button
@@ -1888,6 +1953,9 @@ class SettingsDialog(QDialog):
             s.waypoint_label_color = QColor(0, 0, 0)
             s.waypoint_border_width = 1
             s.waypoint_border_color = QColor(0, 0, 0)
+            s.waypoint_line_style = "虛線 (Dashed)"
+            s.waypoint_line_color = QColor(255, 220, 0)
+            s.waypoint_line_width = 2
             s.record_bg = True
             s.record_bg_interval = 0.5
             s.zoom_step = 0.25
@@ -2050,6 +2118,14 @@ class SettingsDialog(QDialog):
         self.waypoint_border_width_spin.blockSignals(True)
         self.waypoint_border_width_spin.setValue(s.waypoint_border_width)
         self.waypoint_border_width_spin.blockSignals(False)
+
+        self.waypoint_line_style_combo.blockSignals(True)
+        self.waypoint_line_style_combo.setCurrentText(s.waypoint_line_style)
+        self.waypoint_line_style_combo.blockSignals(False)
+        self._update_color_button(self.waypoint_line_color_btn, s.waypoint_line_color)
+        self.waypoint_line_width_spin.blockSignals(True)
+        self.waypoint_line_width_spin.setValue(s.waypoint_line_width)
+        self.waypoint_line_width_spin.blockSignals(False)
 
         self.record_bg_chk.blockSignals(True)
         self.record_bg_chk.setChecked(s.record_bg)
@@ -2331,6 +2407,19 @@ class OverlayWindow(QWidget):
         font.setBold(True)
         painter.setFont(font)
         fm = painter.fontMetrics()
+
+        if s.waypoint_line_style == "虛線 (Dashed)":
+            pts = []
+            for n, wp_idx in enumerate(self._recorded_waypoints, start=1):
+                if wp_idx < len(self.recorded_points):
+                    pts.append(self.recorded_points[wp_idx])
+            if len(pts) > 1:
+                lc2 = s.waypoint_line_color
+                painter.setPen(QPen(lc2, s.waypoint_line_width, Qt.PenStyle.DashLine))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                for i in range(len(pts) - 1):
+                    painter.drawLine(pts[i], pts[i + 1])
+
         for n, wp_idx in enumerate(self._recorded_waypoints, start=1):
             if wp_idx < len(self.recorded_points):
                 pt = self.recorded_points[wp_idx]
