@@ -2026,9 +2026,11 @@ class OverlayWindow(QWidget):
         self.zoom = 3.0
         self.mouse_local = QPoint(self.width() // 2, self.height() // 2)
         self._zoom_anchor = QPoint(self.width() // 2, self.height() // 2)
-        self._magnify_strokes: list[tuple[QColor, list[QPoint]]] = []
+        self._magnify_strokes: list[tuple] = []
         self._magnify_active: list[QPoint] | None = None
-        self._magnify_redo: list[tuple[QColor, list[QPoint]]] = []
+        self._magnify_redo: list[tuple] = []
+        self._magnify_rect_origin: QPoint | None = None
+        self._magnify_rect_current: QPoint | None = None
         self._last_interaction_time = 0.0
         self._screenshot_flash = 0
         self._rec_badge_pos = QPoint(self.width() - 50, 30)
@@ -2207,10 +2209,20 @@ class OverlayWindow(QWidget):
 
         if self.mode == Mode.MAGNIFY:
             self._paint_magnifier(painter)
+            radius = 20
+            cx = self.width() - 40
+            cy = 40
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(15, 18, 24, 220))
+            painter.drawEllipse(QPoint(cx, cy), radius, radius)
+            painter.setFont(QFont("Segoe UI", 16, QFont.Weight.DemiBold))
+            painter.setPen(QColor(248, 250, 252))
+            painter.drawText(
+                QRect(cx - radius, cy - radius, radius * 2, radius * 2),
+                Qt.AlignmentFlag.AlignCenter, "M",
+            )
             if self._screenshot_flash > 0:
                 self._paint_mode_badge(painter, "截圖已儲存!")
-            else:
-                self._paint_mode_badge(painter, f"MAGNIFY  {self.zoom:.1f}x")
             return
 
         self._paint_paths(painter)
@@ -2590,14 +2602,31 @@ class OverlayWindow(QWidget):
         cursor_dx = max(0, min(cursor_d.x(), self.width() - 1))
         cursor_dy = max(0, min(cursor_d.y(), self.height() - 1))
         self._paint_magnify_strokes(painter, src_x, src_y, src_w, src_h)
-        self._paint_crosshair_at(painter, cursor_dx, cursor_dy)
+        self._paint_crosshair_at(painter, cursor_dx, cursor_dy, self.zoom)
 
     def _paint_magnify_strokes(self, painter: QPainter, src_x: int, src_y: int, src_w: int, src_h: int) -> None:
         def td(pts: list[QPoint]) -> list[QPoint]:
             return [self._screen_to_display(p, src_x, src_y, src_w, src_h) for p in pts]
-        for color, points in self._magnify_strokes:
-            self._paint_stroke(painter, color, td(points))
-        if self._magnify_active:
+
+        for item in self._magnify_strokes:
+            if item[0] == "rect":
+                _, color, p1, p2 = item
+                dp1 = self._screen_to_display(p1, src_x, src_y, src_w, src_h)
+                dp2 = self._screen_to_display(p2, src_x, src_y, src_w, src_h)
+                painter.setPen(QPen(color, self.settings.stroke_width, Qt.PenStyle.SolidLine))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawRect(QRect(dp1, dp2))
+            else:
+                _, color, points = item
+                self._paint_stroke(painter, color, td(points))
+
+        if self._magnify_rect_origin is not None and self._magnify_rect_current is not None:
+            dp1 = self._screen_to_display(self._magnify_rect_origin, src_x, src_y, src_w, src_h)
+            dp2 = self._screen_to_display(self._magnify_rect_current, src_x, src_y, src_w, src_h)
+            painter.setPen(QPen(self.draw_color, self.settings.stroke_width, Qt.PenStyle.SolidLine))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(QRect(dp1, dp2))
+        elif self._magnify_active:
             self._paint_stroke(painter, self.draw_color, td(self._magnify_active))
 
     def _paint_lens_magnifier(self, painter: QPainter) -> None:
@@ -2627,14 +2656,15 @@ class OverlayWindow(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawEllipse(QPoint(cx, cy), radius, radius)
 
-        self._paint_crosshair_at(painter, cx, cy)
+        self._paint_crosshair_at(painter, cx, cy, self.zoom)
 
     def _paint_crosshair(self, painter: QPainter) -> None:
         self._paint_crosshair_at(painter, self.width() // 2, self.height() // 2)
 
-    def _paint_crosshair_at(self, painter: QPainter, cx: int, cy: int) -> None:
+    def _paint_crosshair_at(self, painter: QPainter, cx: int, cy: int, zoom: float = 1.0) -> None:
         style = self.settings.crosshair_style
-        size = self.settings.crosshair_size
+        base_size = self.settings.crosshair_size
+        size = max(1, int(base_size * zoom))
         color = QColor(self.settings.crosshair_color)
         color.setAlpha(self.settings.crosshair_alpha)
         pen = QPen(color, 2)
@@ -2655,7 +2685,7 @@ class OverlayWindow(QWidget):
         elif style == "瞄準環 (Reticle)":
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(QPoint(cx, cy), size, size)
-            inner = max(4, size // 2)
+            inner = max(4, base_size // 2)
             painter.drawEllipse(QPoint(cx, cy), inner, inner)
             painter.drawLine(cx - size, cy, cx + size, cy)
             painter.drawLine(cx, cy - size, cx, cy + size)
@@ -2706,7 +2736,12 @@ class OverlayWindow(QWidget):
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
             if self.mode == Mode.MAGNIFY:
-                self._magnify_active = [QPoint(self.mouse_local)]
+                mods = event.modifiers()
+                if mods & Qt.KeyboardModifier.ControlModifier:
+                    self._magnify_rect_origin = QPoint(self.mouse_local)
+                    self._magnify_rect_current = QPoint(self.mouse_local)
+                else:
+                    self._magnify_active = [QPoint(self.mouse_local)]
                 self._magnify_redo.clear()
                 self.update()
             elif self.mode == Mode.NORMAL and self.recording:
@@ -2725,7 +2760,9 @@ class OverlayWindow(QWidget):
             self.update()
         elif self.mode == Mode.MAGNIFY:
             self._last_interaction_time = time.time()
-            if self._magnify_active is not None:
+            if self._magnify_rect_origin is not None:
+                self._magnify_rect_current = QPoint(self.mouse_local)
+            elif self._magnify_active is not None:
                 point = QPoint(self.mouse_local)
                 if manhattan(self._magnify_active[-1], point) >= 2:
                     self._magnify_active.append(point)
@@ -2735,10 +2772,24 @@ class OverlayWindow(QWidget):
         if self._dragging_rec:
             self._dragging_rec = False
             self.update()
-        elif self.mode == Mode.MAGNIFY and self._magnify_active is not None:
-            if len(self._magnify_active) > 1:
-                self._magnify_strokes.append((QColor(self.draw_color), self._magnify_active))
-            self._magnify_active = None
+        elif self.mode == Mode.MAGNIFY:
+            if self._magnify_rect_origin is not None:
+                p1 = self._magnify_rect_origin
+                p2 = self._magnify_rect_current or QPoint(self.mouse_local)
+                mods = event.modifiers()
+                if mods & Qt.KeyboardModifier.ShiftModifier:
+                    w = p2.x() - p1.x()
+                    h = p2.y() - p1.y()
+                    side = max(abs(w), abs(h))
+                    p2 = QPoint(p1.x() + (side if w >= 0 else -side),
+                                p1.y() + (side if h >= 0 else -side))
+                self._magnify_strokes.append(("rect", QColor(self.draw_color), p1, p2))
+                self._magnify_rect_origin = None
+                self._magnify_rect_current = None
+            elif self._magnify_active is not None:
+                if len(self._magnify_active) > 1:
+                    self._magnify_strokes.append(("freehand", QColor(self.draw_color), self._magnify_active))
+                self._magnify_active = None
             self.update()
 
     def wheelEvent(self, event) -> None:  # noqa: N802
