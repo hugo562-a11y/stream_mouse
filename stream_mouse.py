@@ -2905,6 +2905,8 @@ class OverlayWindow(QWidget):
                 p2 = self._magnify_rect_current or QPoint(self.mouse_local)
                 if self._magnify_draw_type == "circle":
                     self._magnify_strokes.append(("circle", QColor(self.draw_color), p1, p2))
+                elif self._magnify_draw_type == "line":
+                    self._magnify_strokes.append(("line", QColor(self.draw_color), p1, p2))
                 else:
                     self._magnify_strokes.append(("rect", QColor(self.draw_color), p1, p2))
                 self._magnify_rect_origin = None
