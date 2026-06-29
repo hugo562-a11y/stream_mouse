@@ -2031,6 +2031,7 @@ class OverlayWindow(QWidget):
         self._magnify_redo: list[tuple] = []
         self._magnify_rect_origin: QPoint | None = None
         self._magnify_rect_current: QPoint | None = None
+        self._magnify_draw_type: str = ""
         self._last_interaction_time = 0.0
         self._screenshot_flash = 0
         self._rec_badge_pos = QPoint(self.width() - 50, 30)
@@ -2161,6 +2162,9 @@ class OverlayWindow(QWidget):
         self._magnify_strokes.clear()
         self._magnify_active = None
         self._magnify_redo.clear()
+        self._magnify_rect_origin = None
+        self._magnify_rect_current = None
+        self._magnify_draw_type = ""
         self.freeze_pixmap = None
         self.unsetCursor()
         self.set_click_through(True)
@@ -2609,15 +2613,27 @@ class OverlayWindow(QWidget):
             return [self._screen_to_display(p, src_x, src_y, src_w, src_h) for p in pts]
 
         for item in self._magnify_strokes:
-            if item[0] == "rect":
-                _, color, p1, p2 = item
+            kind = item[0]
+            color = item[1]
+            if kind == "rect":
+                _, _, p1, p2 = item
                 dp1 = self._screen_to_display(p1, src_x, src_y, src_w, src_h)
                 dp2 = self._screen_to_display(p2, src_x, src_y, src_w, src_h)
                 painter.setPen(QPen(color, self.settings.stroke_width, Qt.PenStyle.SolidLine))
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawRect(QRect(dp1, dp2))
+            elif kind == "circle":
+                _, _, p1, p2 = item
+                dp1 = self._screen_to_display(p1, src_x, src_y, src_w, src_h)
+                dp2 = self._screen_to_display(p2, src_x, src_y, src_w, src_h)
+                dx = dp2.x() - dp1.x()
+                dy = dp2.y() - dp1.y()
+                r = int(math.sqrt(dx * dx + dy * dy))
+                painter.setPen(QPen(color, self.settings.stroke_width, Qt.PenStyle.SolidLine))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawEllipse(dp1, r, r)
             else:
-                _, color, points = item
+                _, _, points = item
                 self._paint_stroke(painter, color, td(points))
 
         if self._magnify_rect_origin is not None and self._magnify_rect_current is not None:
@@ -2625,7 +2641,13 @@ class OverlayWindow(QWidget):
             dp2 = self._screen_to_display(self._magnify_rect_current, src_x, src_y, src_w, src_h)
             painter.setPen(QPen(self.draw_color, self.settings.stroke_width, Qt.PenStyle.SolidLine))
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRect(QRect(dp1, dp2))
+            if self._magnify_draw_type == "circle":
+                dx = dp2.x() - dp1.x()
+                dy = dp2.y() - dp1.y()
+                r = int(math.sqrt(dx * dx + dy * dy))
+                painter.drawEllipse(dp1, r, r)
+            else:
+                painter.drawRect(QRect(dp1, dp2))
         elif self._magnify_active:
             self._paint_stroke(painter, self.draw_color, td(self._magnify_active))
 
@@ -2669,8 +2691,14 @@ class OverlayWindow(QWidget):
         color.setAlpha(self.settings.crosshair_alpha)
         pen = QPen(color, 2)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        painter.setPen(pen)
 
+        if style == "點 (Dot)":
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(color)
+            painter.drawEllipse(QPoint(cx, cy), 3, 3)
+            return
+
+        painter.setPen(pen)
         if style == "十字線 (Crosshair)":
             painter.drawLine(cx - size, cy, cx + size, cy)
             painter.drawLine(cx, cy - size, cx, cy + size)
@@ -2685,8 +2713,6 @@ class OverlayWindow(QWidget):
         elif style == "瞄準環 (Reticle)":
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(QPoint(cx, cy), size, size)
-            inner = max(4, base_size // 2)
-            painter.drawEllipse(QPoint(cx, cy), inner, inner)
             painter.drawLine(cx - size, cy, cx + size, cy)
             painter.drawLine(cx, cy - size, cx, cy + size)
             tick_len = max(2, size // 5)
@@ -2697,9 +2723,10 @@ class OverlayWindow(QWidget):
                     cx + int(r1 * math.cos(rad)), cy + int(r1 * math.sin(rad)),
                     cx + int(size * math.cos(rad)), cy + int(size * math.sin(rad)),
                 )
-        elif style == "點 (Dot)":
-            painter.setBrush(color)
-            painter.drawEllipse(QPoint(cx, cy), 3, 3)
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(color)
+        painter.drawEllipse(QPoint(cx, cy), 3, 3)
 
     def _paint_mode_badge(self, painter: QPainter, text: str) -> None:
         painter.setFont(QFont("Segoe UI", 11, QFont.Weight.DemiBold))
@@ -2737,9 +2764,14 @@ class OverlayWindow(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             if self.mode == Mode.MAGNIFY:
                 mods = event.modifiers()
-                if mods & Qt.KeyboardModifier.ControlModifier:
+                if mods & Qt.KeyboardModifier.ShiftModifier:
                     self._magnify_rect_origin = QPoint(self.mouse_local)
                     self._magnify_rect_current = QPoint(self.mouse_local)
+                    self._magnify_draw_type = "circle"
+                elif mods & Qt.KeyboardModifier.ControlModifier:
+                    self._magnify_rect_origin = QPoint(self.mouse_local)
+                    self._magnify_rect_current = QPoint(self.mouse_local)
+                    self._magnify_draw_type = "rect"
                 else:
                     self._magnify_active = [QPoint(self.mouse_local)]
                 self._magnify_redo.clear()
@@ -2776,16 +2808,13 @@ class OverlayWindow(QWidget):
             if self._magnify_rect_origin is not None:
                 p1 = self._magnify_rect_origin
                 p2 = self._magnify_rect_current or QPoint(self.mouse_local)
-                mods = event.modifiers()
-                if mods & Qt.KeyboardModifier.ShiftModifier:
-                    w = p2.x() - p1.x()
-                    h = p2.y() - p1.y()
-                    side = max(abs(w), abs(h))
-                    p2 = QPoint(p1.x() + (side if w >= 0 else -side),
-                                p1.y() + (side if h >= 0 else -side))
-                self._magnify_strokes.append(("rect", QColor(self.draw_color), p1, p2))
+                if self._magnify_draw_type == "circle":
+                    self._magnify_strokes.append(("circle", QColor(self.draw_color), p1, p2))
+                else:
+                    self._magnify_strokes.append(("rect", QColor(self.draw_color), p1, p2))
                 self._magnify_rect_origin = None
                 self._magnify_rect_current = None
+                self._magnify_draw_type = ""
             elif self._magnify_active is not None:
                 if len(self._magnify_active) > 1:
                     self._magnify_strokes.append(("freehand", QColor(self.draw_color), self._magnify_active))
