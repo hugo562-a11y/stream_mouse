@@ -1,0 +1,6 @@
+PySide6>=6.7
+pywin32>=306
+websocket-client>=1.8
+numpy>=1.26
+sounddevice>=0.4.6
+faster-whisper>=1.0
