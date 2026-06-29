@@ -2610,6 +2610,11 @@ class OverlayWindow(QWidget):
             painter.setPen(QPen(inner, 2))
             painter.setBrush(QColor(c2.red(), c2.green(), c2.blue(), int(80 + 60 * pulse)))
             painter.drawEllipse(self.mouse_local, inner_r, inner_r)
+            dot_color = self.settings.crosshair_color
+            dot_color.setAlpha(230)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(dot_color)
+            painter.drawEllipse(self.mouse_local, 3, 3)
 
         elif style == "單圓圈 (Ring)":
             radius = size + int(size * scale * pulse)
