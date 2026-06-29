@@ -2684,6 +2684,7 @@ class OverlayWindow(QWidget):
         cursor_dy = max(0, min(cursor_d.y(), self.height() - 1))
         self._paint_magnify_strokes(painter, src_x, src_y, src_w, src_h)
         self._paint_crosshair_at(painter, cursor_dx, cursor_dy, self.zoom)
+        self._paint_center_dot(painter, cursor_dx, cursor_dy)
 
     def _paint_magnify_strokes(self, painter: QPainter, src_x: int, src_y: int, src_w: int, src_h: int) -> None:
         def td(pts: list[QPoint]) -> list[QPoint]:
@@ -2761,6 +2762,7 @@ class OverlayWindow(QWidget):
         painter.drawEllipse(QPoint(cx, cy), radius, radius)
 
         self._paint_crosshair_at(painter, cx, cy, self.zoom)
+        self._paint_center_dot(painter, cx, cy)
 
     def _paint_crosshair(self, painter: QPainter) -> None:
         self._paint_crosshair_at(painter, self.width() // 2, self.height() // 2)
@@ -2775,9 +2777,6 @@ class OverlayWindow(QWidget):
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
 
         if style == "點 (Dot)":
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(color)
-            painter.drawEllipse(QPoint(cx, cy), 3, 3)
             return
 
         painter.setPen(pen)
@@ -2806,9 +2805,12 @@ class OverlayWindow(QWidget):
                     cx + int(size * math.cos(rad)), cy + int(size * math.sin(rad)),
                 )
 
+    def _paint_center_dot(self, painter: QPainter, cx: int, cy: int) -> None:
+        color = QColor(self.settings.crosshair_color)
+        color.setAlpha(self.settings.crosshair_alpha)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(color)
-        painter.drawEllipse(QPoint(cx, cy), 3, 3)
+        painter.drawEllipse(QPoint(cx, cy), 4, 4)
 
     def _paint_mode_badge(self, painter: QPainter, text: str) -> None:
         painter.setFont(QFont("Segoe UI", 11, QFont.Weight.DemiBold))
